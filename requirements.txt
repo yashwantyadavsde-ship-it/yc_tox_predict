@@ -1,0 +1,8 @@
+numpy
+pandas
+rdkit
+torch
+torch_geometric
+deepchem
+fastapi
+uvicorn
