@@ -1,0 +1,4 @@
+flask
+rdkit
+torch
+numpy

@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToxGDL | Geometric Deep Learning Molecule Toxicity Predictor</title>
+    
+    <!-- 3Dmol.js for premium 3D molecular rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js"></script>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Running Geometric Message Passing...</div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="brand-logo">
+            🔮 ToxGDL
+            <span class="brand-badge">Geometric AI</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+            <div class="dot green"></div> GNN Engine Calibrated
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- Molecule Input Panel -->
+            <div class="glass-panel input-section">
+                <div class="section-title">🧪 Molecule Input</div>
+                <div class="form-group">
+                    <label for="smilesInput">SMILES String</label>
+                    <textarea id="smilesInput" placeholder="Enter SMILES representation, e.g. CC(=O)Oc1ccccc1C(=O)O"></textarea>
+                </div>
+                
+                <button id="analyzeBtn" class="btn-primary">
+                    <span>⚡ Run Geometric Analysis</span>
+                </button>
+                
+                <div style="margin-top: 20px;">
+                    <label>Quick Reference Presets</label>
+                    <div class="presets-container">
+                        <div class="preset-badge" data-smiles="CC(=O)Oc1ccccc1C(=O)O">Aspirin (Safe)</div>
+                        <div class="preset-badge" data-smiles="O=C(c1ccc(F)cc1)CCCN2CCC(n3c(=O)[nH]c4ccccc43)CC2">Haloperidol (hERG+)</div>
+                        <div class="preset-badge" data-smiles="O=N(=O)c1ccccc1">Nitrobenzene (Ames+)</div>
+                        <div class="preset-badge" data-smiles="CC(=O)Nc1ccc(O)cc1">Acetaminophen (DILI+)</div>
+                        <div class="preset-badge" data-smiles="CN1CCCC1c2cccnc2">Nicotine (LD50+)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Molecular Properties Panel -->
+            <div class="glass-panel info-section" id="propsPanel" style="display: none;">
+                <div class="section-title">📊 Molecular Properties</div>
+                <div class="info-grid">
+                    <div class="info-card">
+                        <div class="info-val" id="valFormula">-</div>
+                        <div class="info-lbl">Formula</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valMW">-</div>
+                        <div class="info-lbl">Weight (g/mol)</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valLogP">-</div>
+                        <div class="info-lbl">LogP</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valTPSA">-</div>
+                        <div class="info-lbl">TPSA (Å²)</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valHBD">-</div>
+                        <div class="info-lbl">H-Bond Donors</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valHBA">-</div>
+                        <div class="info-lbl">H-Bond Acceptors</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div class="dashboard-grid">
+            <div class="top-row">
+                <!-- 3D Conformer & Heatmap Visualizer -->
+                <div class="glass-panel visualizer-container">
+                    <div class="vis-controls">
+                        <div class="section-title" style="margin-bottom: 0;">🧬 3D Conformer Visualizer</div>
+                        
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label style="font-size: 0.75rem;">Color Map Attribution:</label>
+                            <select id="attrSelect" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-glass); border-radius: 8px; color: white; padding: 4px 8px; outline: none; font-size: 0.8rem;">
+                                <option value="herg">hERG Cardiotox</option>
+                                <option value="ames">Ames Mutagenicity</option>
+                                <option value="dili">DILI Hepatotox</option>
+                                <option value="ld50">Acute Oral (LD50)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="viewer3d" class="viewer-3d">
+                        <div class="empty-state-text" id="emptyStateText">
+                            Input a molecule SMILES string on the left and click analyze to render its 3D stereochemical conformation and off-target GDL toxicophore heatmap.
+                        </div>
+                    </div>
+                    
+                    <div class="vis-controls" style="border-bottom: none; border-top: 1px solid var(--border-glass); border-radius: 0 0 16px 16px; padding: 12px 25px;">
+                        <div class="vis-legend">
+                            <div class="legend-item"><span class="dot red"></span> High Toxicity Contribution</div>
+                            <div class="legend-item"><span class="dot white"></span> Neutral</div>
+                            <div class="legend-item"><span class="dot green"></span> Safety Contribution</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toxicity Endpoints Grid -->
+                <div class="glass-panel endpoints-container">
+                    <div class="section-title">🛡️ Toxicity Endpoint Predictions</div>
+                    
+                    <div class="endpoints-grid">
+                        <!-- hERG Cardiotoxicity -->
+                        <div class="endpoint-card">
+                            <div class="endpoint-meta">
+                                <span class="endpoint-name">hERG Cardiotoxicity</span>
+                                <span class="endpoint-score" id="scoreHerg">-</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Potassium channel blockade off-target risk</div>
+                            <div class="progress-bar-container">
+                                <div id="fillHerg" class="progress-fill"></div>
+                            </div>
+                        </div>
+
+                        <!-- Ames Mutagenicity -->
+                        <div class="endpoint-card">
+                            <div class="endpoint-meta">
+                                <span class="endpoint-name">Ames Genotoxicity</span>
+                                <span class="endpoint-score" id="scoreAmes">-</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Mutagenic / DNA damaging potential</div>
+                            <div class="progress-bar-container">
+                                <div id="fillAmes" class="progress-fill"></div>
+                            </div>
+                        </div>
+
+                        <!-- DILI Hepatotoxicity -->
+                        <div class="endpoint-card">
+                            <div class="endpoint-meta">
+                                <span class="endpoint-name">DILI Hepatotoxicity</span>
+                                <span class="endpoint-score" id="scoreDili">-</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Drug-Induced Liver Injury risk</div>
+                            <div class="progress-bar-container">
+                                <div id="fillDili" class="progress-fill"></div>
+                            </div>
+                        </div>
+
+                        <!-- Acute Oral Toxicity (LD50) -->
+                        <div class="endpoint-card">
+                            <div class="endpoint-meta">
+                                <span class="endpoint-name">Acute Toxicity (LD50)</span>
+                                <span class="endpoint-score" id="scoreLd50">-</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">High acute toxicity profile (LD50 &lt; 50mg/kg)</div>
+                            <div class="progress-bar-container">
+                                <div id="fillLd50" class="progress-fill"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Chemist Copilot advice -->
+            <div class="bottom-row">
+                <div class="glass-panel copilot-section" id="copilotPanel" style="display: none;">
+                    <div class="copilot-header">
+                        <div class="section-title" style="margin-bottom: 0;">🤖 Chemist Copilot: Bioisosteric Redesign Recommendations</div>
+                        <span class="brand-badge" style="background: rgba(6, 182, 212, 0.2); border-color: rgba(6, 182, 212, 0.4); color: #22d3ee;">Auto-Generated Advice</span>
+                    </div>
+                    <div class="copilot-body" id="copilotBody">
+                        <!-- Dynamic redesign advice injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Main JavaScript Logic -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
