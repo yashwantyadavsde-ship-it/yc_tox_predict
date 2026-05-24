@@ -121,17 +121,40 @@
             <div class="top-row">
                 <!-- 3D Conformer & Heatmap Visualizer -->
                 <div class="glass-panel visualizer-container">
-                    <div class="vis-controls">
-                        <div class="section-title" style="margin-bottom: 0;">🧬 3D Conformer Visualizer</div>
+                    <div class="vis-controls" style="display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding: 15px 25px;">
+                        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                            <div class="section-title" style="margin-bottom: 0; display: flex; align-items: center; gap: 8px;">🧬 3D Conformer Visualizer</div>
+                            <span class="brand-badge" style="font-size: 0.65rem; background: rgba(34, 211, 238, 0.15); border-color: rgba(34, 211, 238, 0.3); color: #22d3ee; margin: 0; padding: 2px 6px;">Interactive 3D</span>
+                        </div>
                         
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <label style="font-size: 0.75rem;">Color Map Attribution:</label>
-                            <select id="attrSelect" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-glass); border-radius: 8px; color: white; padding: 4px 8px; outline: none; font-size: 0.8rem;">
-                                <option value="herg">hERG Cardiotox</option>
-                                <option value="ames">Ames Mutagenicity</option>
-                                <option value="dili">DILI Hepatotox</option>
-                                <option value="ld50">Acute Oral (LD50)</option>
-                            </select>
+                        <div style="display: flex; flex-wrap: wrap; gap: 15px; align-items: center; background: rgba(255,255,255,0.03); border: 1px solid var(--border-glass); border-radius: 12px; padding: 8px 15px; width: 100%;">
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <label style="font-size: 0.7rem; color: var(--text-secondary); margin: 0;">Liability Map:</label>
+                                <select id="attrSelect" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-glass); border-radius: 8px; color: white; padding: 5px 10px; outline: none; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                    <option value="herg">hERG Cardiotox</option>
+                                    <option value="ames">Ames Mutagenicity</option>
+                                    <option value="dili">DILI Hepatotox</option>
+                                    <option value="ld50">Acute Oral (LD50)</option>
+                                </select>
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <label style="font-size: 0.7rem; color: var(--text-secondary); margin: 0;">Style:</label>
+                                <select id="styleSelect" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-glass); border-radius: 8px; color: white; padding: 5px 10px; outline: none; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                    <option value="integrated">🧬 CPK + Toxicity Glow</option>
+                                    <option value="cpk">🎨 Pure CPK Elements</option>
+                                    <option value="heatmap">🔥 GNN Toxicity Shell</option>
+                                </select>
+                            </div>
+
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <label style="font-size: 0.7rem; color: var(--text-secondary); margin: 0;">Labels:</label>
+                                <select id="labelSelect" style="background: rgba(0,0,0,0.5); border: 1px solid var(--border-glass); border-radius: 8px; color: white; padding: 5px 10px; outline: none; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                    <option value="hetero">Heteroatoms Only</option>
+                                    <option value="all">All Atoms</option>
+                                    <option value="none">None</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
                     
@@ -141,11 +164,25 @@
                         </div>
                     </div>
                     
-                    <div class="vis-controls" style="border-bottom: none; border-top: 1px solid var(--border-glass); border-radius: 0 0 16px 16px; padding: 12px 25px;">
-                        <div class="vis-legend">
-                            <div class="legend-item"><span class="dot red"></span> High Toxicity Contribution</div>
-                            <div class="legend-item"><span class="dot white"></span> Neutral</div>
-                            <div class="legend-item"><span class="dot green"></span> Safety Contribution</div>
+                    <div class="vis-controls" style="border-bottom: none; border-top: 1px solid var(--border-glass); border-radius: 0 0 16px 16px; padding: 15px 25px; display: flex; flex-direction: column; gap: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 10px;">
+                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">GNN Liability Legend:</div>
+                            <div class="vis-legend" style="margin: 0; display: flex; gap: 15px; font-size: 0.8rem; color: var(--text-secondary);">
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span class="dot red" style="width: 10px; height: 10px; border-radius: 50%; background-color: #ef4444; box-shadow: 0 0 8px #ef4444; display: inline-block;"></span> High Liability</div>
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span class="dot white" style="width: 10px; height: 10px; border-radius: 50%; background-color: #ffffff; border: 1px solid #94a3b8; display: inline-block;"></span> Neutral / Stable</div>
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span class="dot green" style="width: 10px; height: 10px; border-radius: 50%; background-color: #10b981; box-shadow: 0 0 8px #10b981; display: inline-block;"></span> Protective Shield</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 10px; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 10px;">
+                            <div style="font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">CPK Elements:</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.75rem; color: var(--text-secondary);">
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background-color: #909090; display: inline-block; border: 1px solid rgba(255,255,255,0.15);"></span> Carbon (C)</div>
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background-color: #ffffff; border: 1px solid #94a3b8; display: inline-block;"></span> Hydrogen (H)</div>
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background-color: #3050f8; display: inline-block;"></span> Nitrogen (N)</div>
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background-color: #ff0d0d; display: inline-block;"></span> Oxygen (O)</div>
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background-color: #ffff30; display: inline-block;"></span> Sulfur (S)</div>
+                                <div class="legend-item" style="display: flex; align-items: center; gap: 6px;"><span style="width: 12px; height: 12px; border-radius: 3px; background-color: #1ff01f; display: inline-block;"></span> Halogens (F, Cl)</div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -40,6 +40,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const viewerElement = document.getElementById("viewer3d");
     const emptyStateText = document.getElementById("emptyStateText");
     const attrSelect = document.getElementById("attrSelect");
+    const styleSelect = document.getElementById("styleSelect");
+    const labelSelect = document.getElementById("labelSelect");
 
     // Scores and Progress Bars
     const scores = {
@@ -85,6 +87,44 @@ document.addEventListener("DOMContentLoaded", () => {
         return "toxic";
     }
 
+    // Helper: Map element symbol to standard CPK color
+    function getCPKColor(elem) {
+        const colors = {
+            'H': '#ffffff',
+            'C': '#909090', // Grey
+            'N': '#3050f8', // Blue
+            'O': '#ff0d0d', // Red
+            'F': '#90e050', // Light green
+            'Cl': '#1ff01f', // Bright green
+            'CL': '#1ff01f',
+            'Br': '#a62929', // Dark red
+            'BR': '#a62929',
+            'I': '#940094', // Purple
+            'S': '#ffff30', // Yellow
+            'P': '#ff8000'  // Orange
+        };
+        return colors[elem] || '#a3a3c2'; // Fallback light blue-grey
+    }
+
+    // Helper: Map element symbol to friendly scientific name
+    function getElementName(elem) {
+        const names = {
+            'H': 'Hydrogen (H)',
+            'C': 'Carbon (C)',
+            'N': 'Nitrogen (N)',
+            'O': 'Oxygen (O)',
+            'F': 'Fluorine (F)',
+            'Cl': 'Chlorine (Cl)',
+            'CL': 'Chlorine (Cl)',
+            'Br': 'Bromine (Br)',
+            'BR': 'Bromine (Br)',
+            'I': 'Iodine (I)',
+            'S': 'Sulfur (S)',
+            'P': 'Phosphorus (P)'
+        };
+        return names[elem] || `Element Symbol: ${elem}`;
+    }
+
     // Initialize/Redraw 3D Molecular Conformation
     function render3DConformer() {
         if (!currentMoleculeData || !currentMoleculeData.sdf) {
@@ -107,8 +147,11 @@ document.addEventListener("DOMContentLoaded", () => {
         glViewer = $3Dmol.createViewer(viewerElement, { backgroundColor: "#060813" });
         glViewer.addModel(currentMoleculeData.sdf, "sdf");
 
-        // Color mapping based on selected endpoint
+        // Fetch visual layout configuration inputs
         const activeEndpoint = attrSelect.value;
+        const activeStyle = styleSelect ? styleSelect.value : "integrated";
+        const activeLabelMode = labelSelect ? labelSelect.value : "hetero";
+
         const attributions = currentMoleculeData.attributions[activeEndpoint] || [];
 
         let model = glViewer.getModel(0);
@@ -117,15 +160,122 @@ document.addEventListener("DOMContentLoaded", () => {
         atoms.forEach((atom, index) => {
             const attrScore = attributions[index] !== undefined ? attributions[index] : 0.0;
             const hexColor = getAttributionColor(attrScore);
+            const elementColor = getCPKColor(atom.elem);
 
-            glViewer.setStyle(
-                { serial: atom.serial },
-                {
-                    sphere: { color: hexColor, scale: 0.32 },
-                    stick: { color: hexColor, radius: 0.16 }
-                }
-            );
+            // Style standard 3Dmol geometries
+            if (activeStyle === "integrated") {
+                // Integrated: CPK standard element sphere in center, encircled by toxicity halo shell
+                glViewer.setStyle(
+                    { serial: atom.serial },
+                    {
+                        sphere: { color: elementColor, scale: 0.24 },
+                        stick: { colorscheme: 'Jmol', radius: 0.12 }
+                    }
+                );
+
+                // Add premium semi-transparent glowing attribution shell around each atom
+                glViewer.addSphere({
+                    center: { x: atom.x, y: atom.y, z: atom.z },
+                    radius: 0.65,
+                    color: hexColor,
+                    alpha: 0.42
+                });
+
+            } else if (activeStyle === "cpk") {
+                // Pure Classic CPK: Atoms sized and colored standard CPK colors (ideal for structure check)
+                glViewer.setStyle(
+                    { serial: atom.serial },
+                    {
+                        sphere: { color: elementColor, scale: 0.32 },
+                        stick: { colorscheme: 'Jmol', radius: 0.14 }
+                    }
+                );
+
+            } else {
+                // Pure GNN Heatmap: original toxicophores mapping representation
+                glViewer.setStyle(
+                    { serial: atom.serial },
+                    {
+                        sphere: { color: hexColor, scale: 0.36, opacity: 0.85 },
+                        stick: { colorscheme: 'Jmol', radius: 0.12 }
+                    }
+                );
+            }
+
+            // Decide whether to add clean, highly visible 3D labels
+            let showLabel = false;
+            if (activeLabelMode === "all") {
+                showLabel = true;
+            } else if (activeLabelMode === "hetero") {
+                showLabel = (atom.elem !== 'C' && atom.elem !== 'H');
+            }
+
+            if (showLabel) {
+                glViewer.addLabel(`${atom.elem}-${index}`, {
+                    position: { x: atom.x, y: atom.y, z: atom.z },
+                    fontColor: '#ffffff',
+                    fontSize: 9,
+                    font: 'Plus Jakarta Sans, sans-serif',
+                    backgroundOpacity: 0.85,
+                    backgroundColor: '#070913',
+                    borderColor: elementColor, // Gorgeous! Border color matches standard element color!
+                    borderWidth: 1.0,
+                    borderOpacity: 0.95
+                });
+            }
         });
+
+        // Add premium, highly responsive 3D hover tooltips to display detailed biophysical states
+        glViewer.setHoverable({}, true,
+            function (atom, viewer, event, container) {
+                if (!atom) return;
+                const attrVal = attributions[atom.index] !== undefined ? attributions[atom.index] : 0.0;
+                const pctStr = (Math.abs(attrVal) * 100).toFixed(1) + "%";
+                let statusText = "Neutral / Stable";
+                let statusColor = "#94a3b8"; // Secondary slate
+                
+                if (attrVal > 0.05) {
+                    statusText = `⚠️ High Liability Contribution (+${pctStr})`;
+                    statusColor = "#ef4444"; // Toxic red
+                } else if (attrVal < -0.05) {
+                    statusText = `✅ Protective Shield Contribution (-${pctStr})`;
+                    statusColor = "#10b981"; // Safe green
+                }
+                
+                const tooltipHtml = `
+                    <div style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 0.75rem; padding: 10px 14px; line-height: 1.6; color: white; background: rgba(7, 9, 19, 0.96); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.65); min-width: 180px;">
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 5px;">
+                            <span style="width: 10px; height: 10px; border-radius: 50%; background-color: ${getCPKColor(atom.elem)}; display: inline-block; border: 1px solid rgba(255,255,255,0.3);"></span>
+                            <strong style="color: #22d3ee; font-size: 0.8rem; font-family: 'Outfit', sans-serif;">${getElementName(atom.elem)}</strong>
+                        </div>
+                        <div style="font-size: 0.7rem; color: var(--text-secondary); margin-bottom: 4px;">Atom Index: <strong>#${atom.index}</strong></div>
+                        <div style="color: ${statusColor}; font-weight: 700; font-size: 0.75rem; margin-bottom: 4px;">${statusText}</div>
+                        <div style="color: #64748b; font-size: 0.65rem; font-family: monospace;">Coords: (${atom.x.toFixed(3)}, ${atom.y.toFixed(3)}, ${atom.z.toFixed(3)})</div>
+                    </div>
+                `;
+                
+                // Show standard HTML tooltip at cursor position
+                let tooltip = document.getElementById("3dmol-tooltip");
+                if (!tooltip) {
+                    tooltip = document.createElement("div");
+                    tooltip.id = "3dmol-tooltip";
+                    tooltip.style.position = "absolute";
+                    tooltip.style.zIndex = "1000";
+                    tooltip.style.pointerEvents = "none";
+                    document.body.appendChild(tooltip);
+                }
+                tooltip.innerHTML = tooltipHtml;
+                tooltip.style.display = "block";
+                tooltip.style.left = (event.clientX + 15) + "px";
+                tooltip.style.top = (event.clientY + 15) + "px";
+            },
+            function (atom, viewer) {
+                const tooltip = document.getElementById("3dmol-tooltip");
+                if (tooltip) {
+                    tooltip.style.display = "none";
+                }
+            }
+        );
 
         glViewer.zoomTo();
         glViewer.render();
@@ -602,4 +752,20 @@ document.addEventListener("DOMContentLoaded", () => {
             render3DConformer();
         }
     });
+
+    if (styleSelect) {
+        styleSelect.addEventListener("change", () => {
+            if (currentMoleculeData) {
+                render3DConformer();
+            }
+        });
+    }
+
+    if (labelSelect) {
+        labelSelect.addEventListener("change", () => {
+            if (currentMoleculeData) {
+                render3DConformer();
+            }
+        });
+    }
 });
