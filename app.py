@@ -11,7 +11,8 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from model.gnn import MoleculeGDLModel, molecule_to_graph, compute_integrated_gradients
 from model.train import train_and_save
-from model.copilot import mutate_molecule
+from model.copilot import mutate_molecule, estimate_target_affinity
+from model.agents import global_registry, run_consultation
 
 app = Flask(__name__)
 
@@ -211,6 +212,12 @@ def predict():
     tpsa = round(Chem.rdMolDescriptors.CalcTPSA(mol), 2)
     rot_bonds = Chem.rdMolDescriptors.CalcNumRotatableBonds(mol)
     
+    # Extract target protein from POST body
+    target_protein = data.get('target', 'General').strip()
+    
+    # Calculate 3D Target Pocket Affinity docking stats for parent
+    parent_affinity = estimate_target_affinity(mol, target_protein)
+    
     # Calculate top toxicophore atom idx for targeted mutations
     avg_attrs = np.zeros(len(mol.GetAtoms()))
     active_endpoints_count = 0
@@ -223,8 +230,24 @@ def predict():
         avg_attrs = avg_attrs / active_endpoints_count
     top_atom_idx = int(np.argmax(avg_attrs)) if len(mol.GetAtoms()) > 0 else 0
     
-    # Run RDKit organic chemistry mutation and scoring engine
-    analogs = mutate_molecule(smiles, probs, top_atom_idx, score_molecule_for_copilot)
+    # Run RDKit organic chemistry mutation and scoring engine (passing target protein)
+    analogs = mutate_molecule(smiles, probs, top_atom_idx, score_molecule_for_copilot, target_protein)
+    
+    # Execute the GDL-powered Multi-Agent Boardroom Consultation dialogue
+    parent_payload = {
+        "predictions": {
+            "herg": float(probs[0]),
+            "ames": float(probs[1]),
+            "dili": float(probs[2]),
+            "ld50": float(probs[3])
+        },
+        "logp": logp,
+        "mw": mw,
+        "tpsa": tpsa,
+        "hbd": hbd,
+        "hba": hba
+    }
+    consultation_log = run_consultation(smiles, parent_payload, analogs, target_protein)
     
     # Get 3D SDF coordinates
     sdf_data = get_sdf_string(mol_3d)
@@ -238,6 +261,7 @@ def predict():
         'hba': hba,
         'tpsa': tpsa,
         'rot_bonds': rot_bonds,
+        'affinity': parent_affinity,
         'predictions': {
             'herg': float(probs[0]),
             'ames': float(probs[1]),
@@ -253,8 +277,39 @@ def predict():
         'sdf': sdf_data,
         'atoms': graph['atoms'],
         'advice': advice,
-        'analogs': analogs
+        'analogs': analogs,
+        'consultation_log': consultation_log
     })
+
+@app.route('/create_agent', methods=['POST'])
+def create_agent():
+    """
+    POST API to dynamically register custom scientific agents inside
+    the global Agent Registry in real-time.
+    """
+    data = request.get_json()
+    if not data or 'name' not in data or 'persona' not in data:
+        return jsonify({'error': 'Name and Persona prompt are required fields.'}), 400
+        
+    name = data['name'].strip()
+    role = data.get('role', 'Specialized Scientist').strip()
+    avatar = data.get('avatar', '🧬').strip()
+    persona = data['persona'].strip()
+    resources = data.get('resources', '').strip()
+    
+    success = global_registry.register_agent(name, role, avatar, persona, resources)
+    
+    if success:
+        return jsonify({'message': f"Agent '{name}' successfully deployed to active boardroom!"})
+    else:
+        return jsonify({'error': 'Failed to deploy agent. Name cannot be empty.'}), 400
+
+@app.route('/get_agents', methods=['GET'])
+def get_agents():
+    """
+    GET API to return list of all active AI agents.
+    """
+    return jsonify(global_registry.get_all_agents())
 
 if __name__ == '__main__':
     # Start the Flask app

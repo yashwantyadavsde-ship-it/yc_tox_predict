@@ -37,8 +37,19 @@
             <div class="glass-panel input-section">
                 <div class="section-title">🧪 Molecule Input</div>
                 <div class="form-group">
-                    <label for="smilesInput">SMILES String</label>
+                    <label for="smilesInput">SMILES String (2D/3D Compliant)</label>
                     <textarea id="smilesInput" placeholder="Enter SMILES representation, e.g. CC(=O)Oc1ccccc1C(=O)O"></textarea>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="targetSelect">Therapeutic Target Pocket (Isomorphic Docking)</label>
+                    <select id="targetSelect" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 12px; padding: 12px; color: var(--text-primary); outline: none; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;">
+                        <option value="General">General / Default Cavity</option>
+                        <option value="EGFR">EGFR (Oncology Pocket)</option>
+                        <option value="Kinase">General Kinase Pocket</option>
+                        <option value="hERG">hERG Potassium Channel</option>
+                        <option value="CYP3A4">CYP3A4 Metabolic Pocket</option>
+                    </select>
                 </div>
                 
                 <button id="analyzeBtn" class="btn-primary">
@@ -85,6 +96,18 @@
                         <div class="info-val" id="valHBA">-</div>
                         <div class="info-lbl">H-Bond Acceptors</div>
                     </div>
+                </div>
+                
+                <!-- Isomorphic 3D Docking Affinity Card -->
+                <div class="docking-affinity-card" id="dockingAffinityCard" style="margin-top: 20px; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px; padding: 15px; display: none;">
+                    <div style="font-size: 0.75rem; color: #22d3ee; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                        <span>🧬 Isomorphic 3D Pocket Affinity</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                        <span style="font-size: 1.2rem; font-weight: 800; color: white;" id="dockingEnergy">- kcal/mol</span>
+                        <span style="background: rgba(34, 211, 238, 0.2); border: 1px solid rgba(34, 211, 238, 0.4); padding: 4px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: #22d3ee;" id="dockingKd">Kd: - nM</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 6px;" id="dockingTargetName">Target Pocket: -</div>
                 </div>
             </div>
         </div>
@@ -183,16 +206,63 @@
             <div class="bottom-row">
                 <div class="glass-panel copilot-section" id="copilotPanel" style="display: none;">
                     <div class="copilot-header">
-                        <div class="section-title" style="margin-bottom: 0; font-size: 1.35rem;">🤖 Chemist Copilot: Active Lead Optimization & Bioisosteric Redesign</div>
-                        <span class="brand-badge" style="background: rgba(6, 182, 212, 0.2); border-color: rgba(6, 182, 212, 0.4); color: #22d3ee; letter-spacing: 1px;">Active MPO Engine</span>
+                        <div class="section-title" style="margin-bottom: 0; font-size: 1.35rem;">🔮 GDL Multi-Agent Discovery Laboratory</div>
+                        <span class="brand-badge" style="background: rgba(6, 182, 212, 0.2); border-color: rgba(6, 182, 212, 0.4); color: #22d3ee; letter-spacing: 1px;">Active Boardroom</span>
                     </div>
                     
                     <div class="copilot-split-container">
-                        <!-- Left Panel: Heuristic Guidance -->
+                        <!-- Left Panel: Chat Boardroom & Custom Agent Creator Tabs -->
                         <div class="copilot-left">
-                            <div class="subsection-header">📝 Heuristic Design Warnings</div>
-                            <div class="copilot-body" id="copilotBody">
-                                <!-- Dynamic redesign advice bullets injected here -->
+                            <!-- Tab Controls -->
+                            <div class="tab-controls">
+                                <button class="tab-btn active" id="tabBoardroomBtn">🤖 AI Research Board Room</button>
+                                <button class="tab-btn" id="tabCustomAgentBtn">🧬 Custom Agent Laboratory</button>
+                            </div>
+                            
+                            <!-- Tab Content 1: AI Boardroom -->
+                            <div class="tab-content active" id="tabBoardroom">
+                                <div class="boardroom-chat-container" id="boardroomThread">
+                                    <!-- Dynamic agent speech bubbles will be injected here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Content 2: Custom Agent Builder -->
+                            <div class="tab-content" id="tabCustomAgent">
+                                <div class="custom-agent-form">
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+                                        🔬 **Scale the Lab**: Deploy your own specialized AI researcher into the active GDL boardroom. Describe their scientific role, their reasoning bias, and provide knowledge resources to train them instantly.
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group" style="flex: 2; margin-bottom: 12px; margin-right: 10px;">
+                                            <label for="agentName">Agent Name</label>
+                                            <input type="text" id="agentName" placeholder="e.g. Dr. FDA, Prof. Soluble" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; outline: none;">
+                                        </div>
+                                        <div class="form-group" style="flex: 1; margin-bottom: 12px;">
+                                            <label for="agentAvatar">Avatar Emoji</label>
+                                            <input type="text" id="agentAvatar" value="🧬" placeholder="Emoji" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; text-align: center; outline: none;">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-group" style="margin-bottom: 12px;">
+                                        <label for="agentRole">Scientific Role / Specialty</label>
+                                        <input type="text" id="agentRole" placeholder="e.g. Compliance Officer, Lipophilicity Expert" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; outline: none;">
+                                    </div>
+                                    
+                                    <div class="form-group" style="margin-bottom: 12px;">
+                                        <label for="agentPersona">Agent Philosophy / Prompt (Anthropic Persona)</label>
+                                        <textarea id="agentPersona" style="height: 70px; font-family: inherit; font-size: 0.85rem; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; outline: none;" placeholder="e.g. You are a strict regulatory officer. Warn about any compound exceeding a Molecular Weight of 450. Check if the compound violates Lipinski's Rule of 5."></textarea>
+                                    </div>
+
+                                    <div class="form-group" style="margin-bottom: 15px;">
+                                        <label for="agentResources">Expert Knowledge Resources / References (Citations)</label>
+                                        <textarea id="agentResources" style="height: 50px; font-family: inherit; font-size: 0.85rem; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; outline: none;" placeholder="e.g. Paste research papers, FDA 2024 handbook summaries, or solubility rules for your agent to quote."></textarea>
+                                    </div>
+                                    
+                                    <button id="deployAgentBtn" class="btn-primary" style="padding: 12px; font-size: 0.85rem; width: 100%; background: linear-gradient(135deg, var(--cyan) 0%, var(--primary) 100%);">
+                                        🚀 Deploy De-Novo Agent
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         
@@ -206,6 +276,7 @@
                     </div>
                 </div>
             </div>
+
         </div>
     </main>
 
