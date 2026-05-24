@@ -6,7 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const analyzeBtn = document.getElementById("analyzeBtn");
     const presetBadges = document.querySelectorAll(".preset-badge");
     const loadingOverlay = document.getElementById("loadingOverlay");
-    
+
     // Properties Panel
     const propsPanel = document.getElementById("propsPanel");
     const valFormula = document.getElementById("valFormula");
@@ -15,19 +15,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const valTPSA = document.getElementById("valTPSA");
     const valHBD = document.getElementById("valHBD");
     const valHBA = document.getElementById("valHBA");
-    
+
     // Isomorphic Docking Affinity Display Panel
     const dockingAffinityCard = document.getElementById("dockingAffinityCard");
     const dockingEnergy = document.getElementById("dockingEnergy");
     const dockingKd = document.getElementById("dockingKd");
     const dockingTargetName = document.getElementById("dockingTargetName");
-    
+
     // Tab Elements
     const tabBoardroomBtn = document.getElementById("tabBoardroomBtn");
     const tabCustomAgentBtn = document.getElementById("tabCustomAgentBtn");
     const tabBoardroom = document.getElementById("tabBoardroom");
     const tabCustomAgent = document.getElementById("tabCustomAgent");
-    
+
     // Custom Agent Builder Inputs
     const agentNameInput = document.getElementById("agentName");
     const agentAvatarInput = document.getElementById("agentAvatar");
@@ -35,12 +35,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const agentPersonaInput = document.getElementById("agentPersona");
     const agentResourcesInput = document.getElementById("agentResources");
     const deployAgentBtn = document.getElementById("deployAgentBtn");
-    
+
     // 3D Viewer Elements
     const viewerElement = document.getElementById("viewer3d");
     const emptyStateText = document.getElementById("emptyStateText");
     const attrSelect = document.getElementById("attrSelect");
-    
+
     // Scores and Progress Bars
     const scores = {
         herg: { text: document.getElementById("scoreHerg"), fill: document.getElementById("fillHerg") },
@@ -48,12 +48,12 @@ document.addEventListener("DOMContentLoaded", () => {
         dili: { text: document.getElementById("scoreDili"), fill: document.getElementById("fillDili") },
         ld50: { text: document.getElementById("scoreLd50"), fill: document.getElementById("fillLd50") }
     };
-    
+
     // Copilot Panel
     const copilotPanel = document.getElementById("copilotPanel");
     const boardroomThread = document.getElementById("boardroomThread");
     const analogsContainer = document.getElementById("analogsContainer");
-    
+
     // Active prediction data store
     let currentMoleculeData = null;
     let glViewer = null;
@@ -91,10 +91,10 @@ document.addEventListener("DOMContentLoaded", () => {
             emptyStateText.style.display = "block";
             return;
         }
-        
+
         emptyStateText.style.display = "none";
         viewerElement.innerHTML = "";
-        
+
         if (typeof $3Dmol === "undefined") {
             viewerElement.innerHTML = `<div class="empty-state-text" style="color: var(--toxic); font-weight: 600; padding: 20px; line-height: 1.6;">
                 ⚠️ 3Dmol.js Library Error:<br>
@@ -103,21 +103,21 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>`;
             return;
         }
-        
+
         glViewer = $3Dmol.createViewer(viewerElement, { backgroundColor: "#060813" });
         glViewer.addModel(currentMoleculeData.sdf, "sdf");
-        
+
         // Color mapping based on selected endpoint
         const activeEndpoint = attrSelect.value;
         const attributions = currentMoleculeData.attributions[activeEndpoint] || [];
-        
+
         let model = glViewer.getModel(0);
         let atoms = model.selectedAtoms({});
-        
+
         atoms.forEach((atom, index) => {
             const attrScore = attributions[index] !== undefined ? attributions[index] : 0.0;
             const hexColor = getAttributionColor(attrScore);
-            
+
             glViewer.setStyle(
                 { serial: atom.serial },
                 {
@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             );
         });
-        
+
         glViewer.zoomTo();
         glViewer.render();
         glViewer.animate({ loop: "backward", step: 0.3 });
@@ -135,26 +135,115 @@ document.addEventListener("DOMContentLoaded", () => {
     // Process Molecular Analysis via Flask Backend
     async function runAnalysis(smiles) {
         if (!smiles) return;
-        
+
         loadingOverlay.classList.add("active");
         const target = targetSelect.value;
-        
+
         try {
             const response = await fetch("/predict", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ smiles, target })
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok) {
                 alert(data.error || "Analysis failed.");
                 return;
             }
-            
+
             currentMoleculeData = data;
-            
+
+            // Handle General Scientific Inquiry
+            if (data.is_general_query) {
+                // 1. Hide molecule-specific properties panel
+                propsPanel.style.display = "none";
+                dockingAffinityCard.style.display = "none";
+
+                // 2. Clear 3D viewer and show inquiry status note
+                viewerElement.innerHTML = `
+                    <div class="empty-state-text" style="position: static; transform: none; color: var(--cyan); font-weight: 500; padding: 25px; line-height: 1.6; text-align: center; border: 1px dashed rgba(34, 211, 238, 0.3); border-radius: 12px; background: rgba(34, 211, 238, 0.04); margin: 20px;">
+                        🔮 <strong>General Scientific Inquiry Active</strong><br><br>
+                        "<em>${data.query}</em>"<br><br>
+                        The GDL multi-agent boardroom has convened to discuss your research question. Read the specialized advisory dialogue panel below!
+                    </div>
+                `;
+                emptyStateText.style.display = "none";
+
+                // 3. Reset toxicity meters
+                for (const endpoint in scores) {
+                    scores[endpoint].text.innerText = "-";
+                    scores[endpoint].text.style.color = "var(--text-secondary)";
+                    scores[endpoint].fill.className = "progress-fill";
+                    scores[endpoint].fill.style.width = "0%";
+                }
+
+                // 4. Update Boardroom Chat bubbles
+                boardroomThread.innerHTML = "";
+                if (data.consultation_log && data.consultation_log.length > 0) {
+                    data.consultation_log.forEach((logItem, index) => {
+                        let avatarClass = "custom";
+                        if (logItem.name === "Dr. GDL") avatarClass = "gdl";
+                        else if (logItem.name === "Dr. Synthesis") avatarClass = "synthesis";
+                        else if (logItem.name === "Dr. ADME") avatarClass = "adme";
+                        else if (logItem.name === "Dr. Safety") avatarClass = "safety";
+
+                        const bubble = document.createElement("div");
+                        bubble.className = "chat-bubble";
+
+                        let htmlDialogue = logItem.dialogue
+                            .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+                            .replace(/`([^`]+)`/g, "<code style='background: rgba(255,255,255,0.08); padding: 2px 4px; border-radius: 4px;'>$1</code>")
+                            .replace(/\n/g, "<br>");
+
+                        bubble.innerHTML = `
+                            <div class="chat-avatar ${avatarClass}">${logItem.avatar}</div>
+                            <div class="chat-content-wrapper">
+                                <div class="chat-meta">
+                                    <span class="chat-name">${logItem.name}</span>
+                                    <span class="chat-role">${logItem.role}</span>
+                                </div>
+                                <div class="chat-body-bubble">
+                                    ${htmlDialogue}
+                                </div>
+                                <button class="thought-toggle" id="toggleThought-${index}">
+                                    🧠 View System 2 Thought
+                                </button>
+                                <div class="thought-block" id="thoughtBlock-${index}">
+                                    ${logItem.thought}
+                                </div>
+                            </div>
+                        `;
+
+                        const toggleBtn = bubble.querySelector(`#toggleThought-${index}`);
+                        const thoughtBlock = bubble.querySelector(`#thoughtBlock-${index}`);
+                        toggleBtn.addEventListener("click", () => {
+                            thoughtBlock.classList.toggle("visible");
+                            toggleBtn.innerHTML = thoughtBlock.classList.contains("visible")
+                                ? "🧠 Hide System 2 Thought"
+                                : "🧠 View System 2 Thought";
+                        });
+
+                        boardroomThread.appendChild(bubble);
+                    });
+                    boardroomThread.scrollTop = 0;
+                }
+
+                // 5. Clear analogs container on the right
+                analogsContainer.innerHTML = `
+                    <div class="empty-state-text" style="position: static; transform: none; width: 100%; color: var(--text-secondary); padding: 25px; font-size: 0.85rem; line-height: 1.5; border: 1px dashed var(--border-glass); border-radius: 12px; text-align: center;">
+                        💡 <strong>General Inquiry Mode:</strong><br><br>
+                        No active chemical graph is loaded. Input a specific SMILES string or drug name (e.g. "Aspirin") to perform bioisosteric analog optimization.
+                    </div>
+                `;
+
+                copilotPanel.style.display = "block";
+                tabBoardroomBtn.click();
+                loadingOverlay.classList.remove("active");
+                return;
+            }
+
             // 1. Update Physical Descriptors Panel
             valFormula.innerText = data.formula;
             valMW.innerText = data.mw;
@@ -162,8 +251,19 @@ document.addEventListener("DOMContentLoaded", () => {
             valTPSA.innerText = data.tpsa;
             valHBD.innerText = data.hbd;
             valHBA.innerText = data.hba;
+
+            const resolvedNameBadge = document.getElementById("resolvedNameBadge");
+            const resolvedNameText = document.getElementById("resolvedNameText");
+            if (data.resolved_name) {
+                resolvedNameText.innerText = data.resolved_name;
+                resolvedNameBadge.style.display = "block";
+                smilesInput.value = data.smiles;
+            } else {
+                resolvedNameBadge.style.display = "none";
+            }
+
             propsPanel.style.display = "block";
-            
+
             // 2. Render Isomorphic 3D Pocket Affinity Card
             if (data.affinity) {
                 dockingEnergy.innerText = data.affinity.delta_g.toFixed(2) + " kcal/mol";
@@ -175,23 +275,23 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 dockingAffinityCard.style.display = "none";
             }
-            
+
             // 3. Render 3D Conformer Heatmap
             render3DConformer();
-            
+
             // 4. Update Toxicity gauges & meters
             for (const endpoint in scores) {
                 const prob = data.predictions[endpoint];
                 const scorePercent = (prob * 100).toFixed(1) + "%";
-                
+
                 scores[endpoint].text.innerText = scorePercent;
                 scores[endpoint].text.style.color = prob > 0.6 ? "var(--toxic)" : (prob >= 0.3 ? "var(--warning)" : "var(--safe)");
-                
+
                 const fillElement = scores[endpoint].fill;
                 fillElement.className = "progress-fill " + getThemeClass(prob);
                 fillElement.style.width = scorePercent;
             }
-            
+
             // 5. Update AI Research Boardroom (Left Panel Tab 1)
             boardroomThread.innerHTML = "";
             if (data.consultation_log && data.consultation_log.length > 0) {
@@ -201,16 +301,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     else if (logItem.name === "Dr. Synthesis") avatarClass = "synthesis";
                     else if (logItem.name === "Dr. ADME") avatarClass = "adme";
                     else if (logItem.name === "Dr. Safety") avatarClass = "safety";
-                    
+
                     const bubble = document.createElement("div");
                     bubble.className = "chat-bubble";
-                    
+
                     // Simple Markdown bold and inline code formatters
                     let htmlDialogue = logItem.dialogue
                         .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
                         .replace(/`([^`]+)`/g, "<code style='background: rgba(255,255,255,0.08); padding: 2px 4px; border-radius: 4px;'>$1</code>")
                         .replace(/\n/g, "<br>");
-                    
+
                     bubble.innerHTML = `
                         <div class="chat-avatar ${avatarClass}">${logItem.avatar}</div>
                         <div class="chat-content-wrapper">
@@ -229,26 +329,26 @@ document.addEventListener("DOMContentLoaded", () => {
                             </div>
                         </div>
                     `;
-                    
+
                     const toggleBtn = bubble.querySelector(`#toggleThought-${index}`);
                     const thoughtBlock = bubble.querySelector(`#thoughtBlock-${index}`);
                     toggleBtn.addEventListener("click", () => {
                         thoughtBlock.classList.toggle("visible");
-                        toggleBtn.innerHTML = thoughtBlock.classList.contains("visible") 
-                            ? "🧠 Hide System 2 Thought" 
+                        toggleBtn.innerHTML = thoughtBlock.classList.contains("visible")
+                            ? "🧠 Hide System 2 Thought"
                             : "🧠 View System 2 Thought";
                     });
-                    
+
                     boardroomThread.appendChild(bubble);
                 });
-                
+
                 // Auto-scroll boardroom chat to top/start to view introduction
                 boardroomThread.scrollTop = 0;
             }
-            
+
             // Switch tabs to courtroom chat thread
             tabBoardroomBtn.click();
-            
+
             // 6. Update Generative MPO Analogs Cards (Right Panel)
             analogsContainer.innerHTML = "";
             if (data.analogs && data.analogs.length > 0) {
@@ -262,12 +362,12 @@ document.addEventListener("DOMContentLoaded", () => {
                         saClass = "moderate";
                         saLabel = "Moderate";
                     }
-                    
+
                     const card = document.createElement("div");
                     card.className = "analog-card";
-                    
+
                     let htmlChange = analog.change.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-                    
+
                     // Multi-parameter comparison list (incorporating Isomorphic pocket affinity score)
                     const properties = [
                         { name: "hERG Cardiotox", parent: data.predictions.herg, analog: analog.predictions.herg, format: "prob" },
@@ -278,18 +378,18 @@ document.addEventListener("DOMContentLoaded", () => {
                         { name: "LogP Lipophilicity", parent: data.logp, analog: analog.logp, format: "num" },
                         { name: "Mol Weight (g/mol)", parent: data.mw, analog: analog.mw, format: "num" }
                     ];
-                    
+
                     let tableRows = "";
                     properties.forEach(prop => {
                         let parentVal = prop.parent;
                         let analogVal = prop.analog;
-                        
+
                         let parentStr = prop.format === "prob" ? (parentVal * 100).toFixed(1) + "%" : (prop.format === "kd" ? (parentVal >= 1000 ? (parentVal / 1000).toFixed(1) + " μM" : parentVal.toFixed(1) + " nM") : parentVal.toString());
                         let analogStr = prop.format === "prob" ? (analogVal * 100).toFixed(1) + "%" : (prop.format === "kd" ? (analogVal >= 1000 ? (analogVal / 1000).toFixed(1) + " μM" : analogVal.toFixed(1) + " nM") : analogVal.toString());
-                        
+
                         let deltaClass = "neutral";
                         let deltaIcon = "→";
-                        
+
                         if (prop.format === "prob") {
                             if (analogVal < parentVal - 0.05) {
                                 deltaClass = "positive";
@@ -324,7 +424,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 deltaIcon = "↑";
                             }
                         }
-                        
+
                         tableRows += `
                             <tr>
                                 <td style="font-weight: 600; color: var(--text-primary);">${prop.name}</td>
@@ -334,7 +434,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             </tr>
                         `;
                     });
-                    
+
                     card.innerHTML = `
                         <div class="analog-card-header">
                             <div class="analog-change-title">${htmlChange}</div>
@@ -364,7 +464,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             </button>
                         </div>
                     `;
-                    
+
                     const copyBtn = card.querySelector(".smiles-btn");
                     copyBtn.addEventListener("click", (e) => {
                         e.stopPropagation();
@@ -374,14 +474,14 @@ document.addEventListener("DOMContentLoaded", () => {
                             copyBtn.innerText = "📋 Copy SMILES";
                         }, 1500);
                     });
-                    
+
                     const loadBtn = card.querySelector(".load-btn");
                     loadBtn.addEventListener("click", (e) => {
                         e.stopPropagation();
                         smilesInput.value = analog.smiles;
                         runAnalysis(analog.smiles);
                     });
-                    
+
                     analogsContainer.appendChild(card);
                 });
             } else {
@@ -391,9 +491,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                 `;
             }
-            
+
             copilotPanel.style.display = "block";
-            
+
         } catch (err) {
             console.error(err);
             alert("App Error: " + err.message);
@@ -411,7 +511,7 @@ document.addEventListener("DOMContentLoaded", () => {
         tabBoardroom.classList.add("active");
         tabCustomAgent.classList.remove("active");
     });
-    
+
     tabCustomAgentBtn.addEventListener("click", () => {
         tabCustomAgentBtn.classList.add("active");
         tabBoardroomBtn.classList.remove("active");
@@ -428,47 +528,47 @@ document.addEventListener("DOMContentLoaded", () => {
         const role = agentRoleInput.value.trim();
         const persona = agentPersonaInput.value.trim();
         const resources = agentResourcesInput.value.trim();
-        
+
         if (!name || !persona) {
             alert("Please fill in the Name and Persona/Philosophy fields for your AI Researcher.");
             return;
         }
-        
+
         loadingOverlay.classList.add("active");
-        
+
         try {
             const response = await fetch("/create_agent", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ name, avatar, role, persona, resources })
             });
-            
+
             const data = await response.json();
-            
+
             if (!response.ok) {
                 alert(data.error || "Failed to register custom agent.");
                 return;
             }
-            
+
             // Notify success
             alert(`🎉 Success! Agent '${name}' has been successfully deployed. Let's run an analysis to let them debate!`);
-            
+
             // Reset inputs
             agentNameInput.value = "";
             agentAvatarInput.value = "🧬";
             agentRoleInput.value = "";
             agentPersonaInput.value = "";
             agentResourcesInput.value = "";
-            
+
             // Switch tabs back to active Board Room boardroom thread
             tabBoardroomBtn.click();
-            
+
             // Re-run analysis if there's an active SMILES string to dynamically include the new agent
             const smiles = smilesInput.value.trim();
             if (smiles) {
                 runAnalysis(smiles);
             }
-            
+
         } catch (err) {
             console.error(err);
             alert("Connection Error: " + err.message);
@@ -485,7 +585,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (smiles) {
             runAnalysis(smiles);
         } else {
-            alert("Please enter a valid SMILES string.");
+            alert("Please enter a chemical name or SMILES string.");
         }
     });
 

@@ -1,5 +1,6 @@
 import os
 import sys
+import requests
 from flask import Flask, request, jsonify, render_template
 from rdkit import Chem
 from rdkit.Chem import AllChem
@@ -13,6 +14,46 @@ from model.gnn import MoleculeGDLModel, molecule_to_graph, compute_integrated_gr
 from model.train import train_and_save
 from model.copilot import mutate_molecule, estimate_target_affinity
 from model.agents import global_registry, run_consultation
+
+LOCAL_NAME_TO_SMILES = {
+    "aspirin": "CC(=O)Oc1ccccc1C(=O)O",
+    "ibuprofen": "CC(C)Cc1ccc(C(C)C(=O)O)cc1",
+    "acetaminophen": "CC(=O)Nc1ccc(O)cc1",
+    "paracetamol": "CC(=O)Nc1ccc(O)cc1",
+    "haloperidol": "O=C(c1ccc(F)cc1)CCCN2CCC(n3c(=O)[nH]c4ccccc43)CC2",
+    "nicotine": "CN1CCCC1c2cccnc2",
+    "caffeine": "CN1C(=O)N(C)c2ncn(C)c2C1=O",
+    "water": "O",
+    "ethanol": "CCO",
+    "methanol": "CO",
+    "glucose": "OC[C@H]1OC(O)[C@@H](O)[C@@H](O)[C@@H]1O",
+    "cocaine": "CN1C2CCC1C(C(=O)OC)C(OC(=O)c3ccccc3)C2"
+}
+
+def resolve_name_to_smiles(name):
+    """
+    Resolves common drug names / chemical names to SMILES strings.
+    Utilizes a local fast-lookup dictionary and falls back dynamically 
+    to the official NIH PubChem PUG REST API.
+    """
+    name_clean = name.strip().lower()
+    
+    # 1. Local fast dictionary lookup
+    if name_clean in LOCAL_NAME_TO_SMILES:
+        return LOCAL_NAME_TO_SMILES[name_clean]
+        
+    # 2. Remote NIH PubChem PUG REST API query
+    try:
+        url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{name_clean}/property/CanonicalSMILES/JSON"
+        res = requests.get(url, timeout=2.0)
+        if res.status_code == 200:
+            data = res.json()
+            smiles = data["PropertyTable"]["Properties"][0]["CanonicalSMILES"]
+            return smiles
+    except Exception as e:
+        print(f"PubChem Name resolution failed for '{name}': {e}")
+        
+    return None
 
 app = Flask(__name__)
 
@@ -164,12 +205,41 @@ def home():
 def predict():
     data = request.get_json()
     if not data or 'smiles' not in data:
-        return jsonify({'error': 'No SMILES string provided.'}), 400
+        return jsonify({'error': 'No SMILES or chemical name provided.'}), 400
         
     smiles = data['smiles'].strip()
+    if not smiles:
+        return jsonify({'error': 'Chemical input cannot be empty.'}), 400
+        
+    # Check if the input is a common chemical/drug name instead of a SMILES string
     mol = Chem.MolFromSmiles(smiles)
+    resolved_name = None
+    
     if mol is None:
-        return jsonify({'error': 'Invalid SMILES string. Please check the chemical structure.'}), 400
+        # It's not a valid SMILES. Let's resolve it dynamically using PubChem or local dict
+        resolved_smiles = resolve_name_to_smiles(smiles)
+        if resolved_smiles is not None:
+            resolved_name = smiles # Keep track of original chemical name
+            smiles = resolved_smiles
+            mol = Chem.MolFromSmiles(smiles)
+            
+    is_general_query = False
+    if mol is None:
+        # Check if the text looks like a general scientific query rather than a malformed chemical name
+        if len(smiles.split()) > 1 or "?" in smiles or len(smiles) > 25:
+            is_general_query = True
+            
+    if is_general_query:
+        target_protein = data.get('target', 'General').strip()
+        consultation_log = run_consultation(smiles, parent_data=None, analogs=[], target_protein=target_protein)
+        return jsonify({
+            'is_general_query': True,
+            'query': smiles,
+            'consultation_log': consultation_log
+        })
+            
+    if mol is None:
+        return jsonify({'error': f"Failed to resolve chemical representation. '{data['smiles']}' is not a valid SMILES string, was not recognized as a common drug name, and does not match the pattern of a general scientific query. Please verify spelling."}), 400
         
     # Generate 3D Conformation
     mol_3d = Chem.AddHs(mol)
@@ -262,6 +332,7 @@ def predict():
         'tpsa': tpsa,
         'rot_bonds': rot_bonds,
         'affinity': parent_affinity,
+        'resolved_name': resolved_name,
         'predictions': {
             'herg': float(probs[0]),
             'ames': float(probs[1]),
