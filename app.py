@@ -315,7 +315,8 @@ def predict():
         "mw": mw,
         "tpsa": tpsa,
         "hbd": hbd,
-        "hba": hba
+        "hba": hba,
+        "formula": formula
     }
     consultation_log = run_consultation(smiles, parent_payload, analogs, target_protein)
     
