@@ -196,57 +196,90 @@ class MessagePassingLayer(nn.Module):
         
         return x_new
 
-class MoleculeGDLModel(nn.Module):
+class MoleculeEncoder(nn.Module):
     """
-    Molecule Toxicity Predictor GNN Model.
-    Predicts four toxicological endpoints:
-    - hERG (Cardiotoxicity)
-    - Ames (Mutagenicity)
-    - DILI (Drug-Induced Liver Injury)
-    - LD50 (Acute Oral Toxicity Class, Binary: Highly Toxic vs Low-Moderate)
+    Core GDL GNN backbone. Represents a molecule as a graph and outputs
+    a 128-dimensional embedding of the global molecular topology.
     """
     def __init__(self, num_atom_feats=31, num_bond_feats=6, hidden_dim=64):
-        super(MoleculeGDLModel, self).__init__()
-        
-        # Feature embeddings
+        super(MoleculeEncoder, self).__init__()
         self.atom_encoder = nn.Sequential(
             nn.Linear(num_atom_feats, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim)
         )
-        
-        # Message passing layers
         self.conv1 = MessagePassingLayer(hidden_dim, num_bond_feats, hidden_dim)
         self.conv2 = MessagePassingLayer(hidden_dim, num_bond_feats, hidden_dim)
         self.conv3 = MessagePassingLayer(hidden_dim, num_bond_feats, hidden_dim)
-        
-        # Final classification layers for 4 endpoints
-        self.fc_herg = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1))
-        self.fc_ames = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1))
-        self.fc_dili = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1))
-        self.fc_ld50 = nn.Sequential(nn.Linear(hidden_dim * 2, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, 1))
 
     def forward(self, x, edge_index, edge_attr):
         # 1. Encode atoms
         h = self.atom_encoder(x)
         
-        # 2. Message passing
+        # 2. Message passing (3-bond context)
         h = h + F.relu(self.conv1(h, edge_index, edge_attr))
         h = h + F.relu(self.conv2(h, edge_index, edge_attr))
         h = h + F.relu(self.conv3(h, edge_index, edge_attr))
         
-        # 3. Global Pooling (Sum + Max pooling)
+        # 3. Global Pooling (Sum + Max pooling) to form a unified fingerprint
         h_sum = torch.sum(h, dim=0, keepdim=True)
         h_max = torch.max(h, dim=0, keepdim=True)[0]
         h_mol = torch.cat([h_sum, h_max], dim=-1) # [1, hidden_dim * 2]
+        return h_mol
+
+class PredictionHead(nn.Module):
+    """
+    Task-specific classifier/regressor trained on the GDL molecular embedding.
+    Allows modular plug-and-play adding of endpoints on demand.
+    """
+    def __init__(self, in_dim=128, hidden_dim=64):
+        super(PredictionHead, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(in_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        )
+
+    def forward(self, h_mol):
+        return self.net(h_mol)
+
+class MoleculeGDLModel(nn.Module):
+    """
+    Toxicity Predictor GNN wrapping the MoleculeEncoder and dynamic Task Heads.
+    Maintains backward compatibility with original multi-task weight loading.
+    """
+    def __init__(self, num_atom_feats=31, num_bond_feats=6, hidden_dim=64):
+        super(MoleculeGDLModel, self).__init__()
+        # 1. Modular GDL backbone
+        self.encoder = MoleculeEncoder(num_atom_feats, num_bond_feats, hidden_dim)
         
-        # 4. Endpoints prediction
-        herg_logit = self.fc_herg(h_mol)
-        ames_logit = self.fc_ames(h_mol)
-        dili_logit = self.fc_dili(h_mol)
-        ld50_logit = self.fc_ld50(h_mol)
+        # 2. Modular prediction heads (stored in a ModuleDict for dynamic indexing)
+        self.heads = nn.ModuleDict({
+            'herg': PredictionHead(in_dim=hidden_dim * 2, hidden_dim=hidden_dim),
+            'ames': PredictionHead(in_dim=hidden_dim * 2, hidden_dim=hidden_dim),
+            'dili': PredictionHead(in_dim=hidden_dim * 2, hidden_dim=hidden_dim),
+            'ld50': PredictionHead(in_dim=hidden_dim * 2, hidden_dim=hidden_dim)
+        })
+
+    def forward(self, x, edge_index, edge_attr):
+        h_mol = self.encoder(x, edge_index, edge_attr)
         
-        return torch.cat([herg_logit, ames_logit, dili_logit, ld50_logit], dim=-1) # [1, 4]
+        # Evaluate all registered heads in a deterministic order
+        # We start with the 4 base endpoints to maintain strict index compatibility
+        ordered_keys = ['herg', 'ames', 'dili', 'ld50']
+        for k in self.heads.keys():
+            if k not in ordered_keys:
+                ordered_keys.append(k)
+        
+        logits = [self.heads[k](h_mol) for k in ordered_keys]
+        return torch.cat(logits, dim=-1)
+
+    def add_endpoint(self, endpoint_name, in_dim=128, hidden_dim=64):
+        """
+        Dynamically registers a new endpoint classification head on demand!
+        """
+        self.heads[endpoint_name] = PredictionHead(in_dim=in_dim, hidden_dim=hidden_dim)
+
 
 # ==========================================
 # 3. Integrated Gradients Explainability

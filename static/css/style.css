@@ -465,3 +465,174 @@ textarea:focus {
     font-size: 0.95rem;
     width: 80%;
 }
+
+/* Split Layout for Copilot */
+.copilot-split-container {
+    display: grid;
+    grid-template-columns: 1.1fr 1.3fr;
+    gap: 35px;
+    margin-top: 15px;
+}
+
+@media (max-width: 1024px) {
+    .copilot-split-container {
+        grid-template-columns: 1fr;
+        gap: 30px;
+    }
+}
+
+.subsection-header {
+    font-family: 'Outfit', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+    margin-bottom: 15px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
+}
+
+.copilot-left, .copilot-right {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Analogs & MPO Cards Styling */
+.analogs-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.analog-card {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    transition: all 0.3s ease;
+}
+
+.analog-card:hover {
+    border-color: rgba(6, 182, 212, 0.3);
+    box-shadow: 0 4px 20px rgba(6, 182, 212, 0.05);
+    transform: translateY(-2px);
+}
+
+.analog-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 15px;
+}
+
+.analog-change-title {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    line-height: 1.5;
+    padding-right: 10px;
+}
+
+.sa-badge {
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.sa-badge.easy { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); color: #34d399; }
+.sa-badge.moderate { background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.3); color: #fbbf24; }
+.sa-badge.difficult { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; }
+
+/* Table styling for MPO Comparison */
+.mpo-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.mpo-table th, .mpo-table td {
+    padding: 6px 8px;
+    text-align: left;
+}
+
+.mpo-table th {
+    font-weight: 600;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+}
+
+.mpo-table td {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.mpo-table tr:hover td {
+    color: var(--text-primary);
+}
+
+.mpo-diff {
+    font-weight: 700;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.mpo-diff.positive { color: var(--safe); }
+.mpo-diff.negative { color: var(--toxic); }
+.mpo-diff.neutral { color: var(--text-secondary); }
+
+/* Card Actions styling */
+.analog-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    align-items: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 12px;
+}
+
+.smiles-btn, .load-btn {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.smiles-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-glass);
+    color: var(--text-secondary);
+}
+
+.smiles-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.load-btn {
+    background: rgba(6, 182, 212, 0.15);
+    border: 1px solid rgba(6, 182, 212, 0.3);
+    color: #22d3ee;
+}
+
+.load-btn:hover {
+    background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(139, 92, 246, 0.3));
+    border-color: rgba(6, 182, 212, 0.5);
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+}
+
