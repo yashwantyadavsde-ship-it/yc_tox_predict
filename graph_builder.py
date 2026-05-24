@@ -1,74 +1,87 @@
-import pandas as pd
+import os
+import sys
+import gzip
+import csv
+import io
+import urllib.request
 from rdkit import Chem
 import torch
-from torch_geometric.data import Data
+
+# Ensure model directory is on path
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
+from model.gnn import molecule_to_graph
 
 def smiles_to_graph(smiles, y_val):
     """
-    Converts a SMILES string to a PyTorch Geometric Data object.
-    Nodes = Atoms (Atomic number is used as the node feature)
-    Edges = Bonds (Adjacency list)
+    Wrapper around model.gnn.molecule_to_graph to maintain backward compatibility.
     """
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return None # Invalid SMILES
-        
-    # Node features: Atomic number of each atom
-    node_features = []
-    for atom in mol.GetAtoms():
-        node_features.append([atom.GetAtomicNum()])
-        
-    x = torch.tensor(node_features, dtype=torch.float)
-    
-    # Edges
-    edges = []
-    for bond in mol.GetBonds():
-        i = bond.GetBeginAtomIdx()
-        j = bond.GetEndAtomIdx()
-        # Undirected graph, so add both directions
-        edges.append([i, j])
-        edges.append([j, i])
-        
-    if len(edges) > 0:
-        edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
-    else:
-        # Molecule with no bonds (e.g. single ion)
-        edge_index = torch.empty((2, 0), dtype=torch.long)
-        
-    # Label (Toxicity flag)
-    y = torch.tensor([y_val], dtype=torch.float)
-    
-    # Create PyTorch Geometric Data object
-    data = Data(x=x, edge_index=edge_index, y=y)
-    return data
+    graph = molecule_to_graph(smiles)
+    if graph is not None:
+        graph['y'] = torch.tensor([y_val], dtype=torch.float32)
+    return graph
 
 def main():
     print("Building Geometric Graphs from ClinTox Dataset...")
     csv_url = 'https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/clintox.csv.gz'
-    df = pd.read_csv(csv_url)
     
-    # Take the first 5 molecules
-    sample_df = df.head(5)
-    
-    graphs = []
-    for idx, row in sample_df.iterrows():
-        smiles = row['smiles']
-        toxicity = row['CT_TOX']
+    try:
+        # Download and decompress the clinTox file using built-in urllib and gzip
+        req = urllib.request.Request(csv_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            with gzip.GzipFile(fileobj=response) as uncompressed:
+                csv_data = uncompressed.read().decode('utf-8')
+                
+        reader = csv.DictReader(io.StringIO(csv_data))
+        rows = list(reader)
         
-        graph = smiles_to_graph(smiles, toxicity)
-        if graph is not None:
-            graphs.append((smiles, graph))
+        # Take the first 5 molecules
+        sample_rows = rows[:5]
+        
+        graphs = []
+        for idx, row in enumerate(sample_rows):
+            smiles = row['smiles']
+            try:
+                ct_tox = float(row['CT_TOX'])
+            except ValueError:
+                ct_tox = 0.0
+                
+            graph = smiles_to_graph(smiles, ct_tox)
+            if graph is not None:
+                graphs.append((smiles, graph))
+                
+        print(f"\nSuccessfully converted {len(graphs)} molecules into Graphs.\n")
+        for idx, (smiles, g) in enumerate(graphs):
+            num_atoms = g['x'].size(0)
+            num_bonds = g['edge_index'].size(1) // 2
+            print(f"Graph [{idx}]:")
+            print(f"  SMILES: {smiles}")
+            print(f"  Nodes (Atoms): {num_atoms}")
+            print(f"  Edges (Bonds): {num_bonds}")
+            print(f"  -> Target Toxicity (y): {g['y'].item()}\n")
             
-    # Display the results
-    print(f"\nSuccessfully converted {len(graphs)} molecules into Graphs.\n")
-    for idx, (smiles, g) in enumerate(graphs):
-        num_atoms = g.num_nodes
-        num_bonds = g.num_edges // 2 # Divided by 2 because it's undirected
-        print(f"Graph [{idx}]:")
-        print(f"  SMILES: {smiles}")
-        print(f"  PyG Data: {g}")
-        print(f"  -> It has {num_atoms} Atoms (Nodes) and {num_bonds} Bonds (Edges)")
-        print(f"  -> Target Toxicity (y): {g.y.item()}\n")
+    except Exception as e:
+        print(f"Failed to fetch or parse dataset: {e}")
+        print("Falling back to local reference mocks...")
+        # Local mock references
+        presets = [
+            ("CC(=O)Oc1ccccc1C(=O)O", 0.0), # Aspirin
+            ("O=C(c1ccc(F)cc1)CCCN2CCC(n3c(=O)[nH]c4ccccc43)CC2", 1.0) # Haloperidol
+        ]
+        graphs = []
+        for idx, (smiles, y_val) in enumerate(presets):
+            graph = smiles_to_graph(smiles, y_val)
+            if graph is not None:
+                graphs.append((smiles, graph))
+        
+        print(f"\nSuccessfully converted {len(graphs)} fallback preset molecules into Graphs.\n")
+        for idx, (smiles, g) in enumerate(graphs):
+            num_atoms = g['x'].size(0)
+            num_bonds = g['edge_index'].size(1) // 2
+            print(f"Graph [{idx}]:")
+            print(f"  SMILES: {smiles}")
+            print(f"  Nodes (Atoms): {num_atoms}")
+            print(f"  Edges (Bonds): {num_bonds}")
+            print(f"  -> Target Toxicity (y): {g['y'].item()}\n")
 
 if __name__ == '__main__':
     main()
