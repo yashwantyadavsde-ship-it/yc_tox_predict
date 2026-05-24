@@ -167,7 +167,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 fillElement.style.width = scorePercent;
             }
             
-            // 4. Update Copilot Advice
+            // 4. Update Heuristic Advice (Left panel)
             copilotBody.innerHTML = "";
             data.advice.forEach(tip => {
                 const bullet = document.createElement("div");
@@ -178,6 +178,148 @@ document.addEventListener("DOMContentLoaded", () => {
                 bullet.innerHTML = htmlTip;
                 copilotBody.appendChild(bullet);
             });
+            
+            // 5. Update Generative MPO Analogs Cards (Right panel)
+            const analogsContainer = document.getElementById("analogsContainer");
+            analogsContainer.innerHTML = "";
+            
+            if (data.analogs && data.analogs.length > 0) {
+                data.analogs.forEach(analog => {
+                    // Determine SA badge theme
+                    let saClass = "easy";
+                    let saLabel = "Easy";
+                    if (analog.sa_score > 6.0) {
+                        saClass = "difficult";
+                        saLabel = "Hard";
+                    } else if (analog.sa_score > 3.5) {
+                        saClass = "moderate";
+                        saLabel = "Moderate";
+                    }
+                    
+                    const card = document.createElement("div");
+                    card.className = "analog-card";
+                    
+                    // Format advice text (handling Markdown bold)
+                    let htmlChange = analog.change.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+                    
+                    // Create comparison table rows for physical properties and toxicities
+                    const properties = [
+                        { name: "hERG Cardiotox", parent: data.predictions.herg, analog: analog.predictions.herg, format: "prob" },
+                        { name: "Ames Genotox", parent: data.predictions.ames, analog: analog.predictions.ames, format: "prob" },
+                        { name: "DILI Hepatotox", parent: data.predictions.dili, analog: analog.predictions.dili, format: "prob" },
+                        { name: "Acute Tox (LD50)", parent: data.predictions.ld50, analog: analog.predictions.ld50, format: "prob" },
+                        { name: "LogP Lipophilicity", parent: data.logp, analog: analog.logp, format: "num" },
+                        { name: "Mol Weight (g/mol)", parent: data.mw, analog: analog.mw, format: "num" }
+                    ];
+                    
+                    let tableRows = "";
+                    properties.forEach(prop => {
+                        let parentVal = prop.parent;
+                        let analogVal = prop.analog;
+                        
+                        let parentStr = prop.format === "prob" ? (parentVal * 100).toFixed(1) + "%" : parentVal.toString();
+                        let analogStr = prop.format === "prob" ? (analogVal * 100).toFixed(1) + "%" : analogVal.toString();
+                        
+                        // Calculate change delta and class (green = improvement, red = deterioration, grey = neutral)
+                        let deltaClass = "neutral";
+                        let deltaIcon = "→";
+                        
+                        if (prop.format === "prob") {
+                            // Toxicity: lower is better
+                            if (analogVal < parentVal - 0.05) {
+                                deltaClass = "positive"; // Green (improved safety)
+                                deltaIcon = "↓ Safe";
+                            } else if (analogVal > parentVal + 0.05) {
+                                deltaClass = "negative"; // Red (added toxicity risk)
+                                deltaIcon = "↑ Risk";
+                            }
+                        } else if (prop.name.startsWith("LogP")) {
+                            // Lower LogP is generally safer
+                            if (analogVal < parentVal) {
+                                deltaClass = "positive";
+                                deltaIcon = "↓";
+                            } else if (analogVal > parentVal) {
+                                deltaClass = "negative";
+                                deltaIcon = "↑";
+                            }
+                        } else if (prop.name.startsWith("Mol Weight")) {
+                            // Lower Molecular Weight is generally cleaner for synth/oral absorption
+                            if (analogVal < parentVal) {
+                                deltaClass = "positive";
+                                deltaIcon = "↓";
+                            } else if (analogVal > parentVal) {
+                                deltaClass = "negative";
+                                deltaIcon = "↑";
+                            }
+                        }
+                        
+                        tableRows += `
+                            <tr>
+                                <td style="font-weight: 600; color: var(--text-primary);">${prop.name}</td>
+                                <td>${parentStr}</td>
+                                <td>${analogStr}</td>
+                                <td><span class="mpo-diff ${deltaClass}">${deltaIcon}</span></td>
+                            </tr>
+                        `;
+                    });
+                    
+                    card.innerHTML = `
+                        <div class="analog-card-header">
+                            <div class="analog-change-title">${htmlChange}</div>
+                            <span class="sa-badge ${saClass}">SA: ${analog.sa_score.toFixed(1)} (${saLabel})</span>
+                        </div>
+                        
+                        <table class="mpo-table">
+                            <thead>
+                                <tr>
+                                    <th>Parameter</th>
+                                    <th>Parent</th>
+                                    <th>Analog</th>
+                                    <th>Shift</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tableRows}
+                            </tbody>
+                        </table>
+                        
+                        <div class="analog-actions">
+                            <button class="smiles-btn" data-smiles="${analog.smiles}">
+                                📋 Copy SMILES
+                            </button>
+                            <button class="load-btn" data-smiles="${analog.smiles}">
+                                ⚡ Load Analog
+                            </button>
+                        </div>
+                    `;
+                    
+                    // Bind events inside the card
+                    const copyBtn = card.querySelector(".smiles-btn");
+                    copyBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(analog.smiles);
+                        copyBtn.innerText = "✓ Copied!";
+                        setTimeout(() => {
+                            copyBtn.innerText = "📋 Copy SMILES";
+                        }, 1500);
+                    });
+                    
+                    const loadBtn = card.querySelector(".load-btn");
+                    loadBtn.addEventListener("click", (e) => {
+                        e.stopPropagation();
+                        smilesInput.value = analog.smiles;
+                        runAnalysis(analog.smiles);
+                    });
+                    
+                    analogsContainer.appendChild(card);
+                });
+            } else {
+                analogsContainer.innerHTML = `
+                    <div class="empty-state-text" style="position: static; transform: none; width: 100%; color: var(--text-secondary); padding: 25px; font-size: 0.85rem; line-height: 1.5; border: 1px dashed var(--border-glass); border-radius: 12px; text-align: center;">
+                        This molecule has a clean safety profile! No mutagenic/cardiotoxic liabilities were flagged by the GNN model, so no bioisosteric modifications are necessary.
+                    </div>
+                `;
+            }
             
             copilotPanel.style.display = "block";
             

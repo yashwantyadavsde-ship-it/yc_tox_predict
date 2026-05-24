@@ -11,12 +11,37 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
 from model.gnn import MoleculeGDLModel, molecule_to_graph, compute_integrated_gradients
 from model.train import train_and_save
+from model.copilot import mutate_molecule
 
 app = Flask(__name__)
 
 # Bootstrapping: Ensure model is trained and weights exist
 MODEL_WEIGHTS_PATH = os.path.join("model", "weights", "gdl_toxicity_model.pt")
 model = None
+
+def load_state_dict_compatible(model, state_dict):
+    """
+    Translates weights from legacy multi-task models into the new
+    decoupled backbone encoder + prediction heads format dynamically.
+    """
+    new_state_dict = {}
+    for key, val in state_dict.items():
+        # 1. Map encoder/backbone keys
+        if key.startswith("atom_encoder") or key.startswith("conv1") or key.startswith("conv2") or key.startswith("conv3"):
+            new_key = "encoder." + key
+        # 2. Map classification heads
+        elif key.startswith("fc_herg"):
+            new_key = key.replace("fc_herg", "heads.herg.net")
+        elif key.startswith("fc_ames"):
+            new_key = key.replace("fc_ames", "heads.ames.net")
+        elif key.startswith("fc_dili"):
+            new_key = key.replace("fc_dili", "heads.dili.net")
+        elif key.startswith("fc_ld50"):
+            new_key = key.replace("fc_ld50", "heads.ld50.net")
+        else:
+            new_key = key
+        new_state_dict[new_key] = val
+    model.load_state_dict(new_state_dict)
 
 def get_model():
     global model
@@ -25,12 +50,34 @@ def get_model():
             print("Model weights not found. Bootstrapping and training the GNN now...")
             train_and_save()
         
-        # Load weights
+        # Load weights with dynamic compatibility mapping
         model = MoleculeGDLModel(num_atom_feats=31, num_bond_feats=6, hidden_dim=64)
-        model.load_state_dict(torch.load(MODEL_WEIGHTS_PATH, weights_only=True))
+        state_dict = torch.load(MODEL_WEIGHTS_PATH, weights_only=True)
+        load_state_dict_compatible(model, state_dict)
         model.eval()
-        print("GNN Model successfully loaded.")
+        print("GNN Model successfully loaded with decoupled compatibility.")
     return model
+
+def score_molecule_for_copilot(smiles):
+    """
+    Evaluation subroutine passed to the copilot engine to compute predictions
+    of generated bioisosteres in real-time.
+    """
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    graph = molecule_to_graph(smiles)
+    if graph is None:
+        return None
+    net = get_model()
+    x, edge_index, edge_attr = graph['x'], graph['edge_index'], graph['edge_attr']
+    with torch.no_grad():
+        logits = net(x, edge_index, edge_attr)
+        probs = torch.sigmoid(logits).cpu().numpy()[0]
+    return {
+        "mol": mol,
+        "predictions": probs
+    }
 
 # Dictionary mapping endpoint indexes to names
 ENDPOINTS = ["hERG Cardiotoxicity", "Ames Mutagenicity", "DILI Hepatotoxicity", "Acute Oral Toxicity (LD50)"]
@@ -155,10 +202,7 @@ def predict():
     # Generate Copilot Advice
     advice = generate_chemist_copilot_advice(smiles, mol, attributions, probs)
     
-    # Get 3D SDF coordinates
-    sdf_data = get_sdf_string(mol_3d)
-    
-    # Compute molecular weight
+    # Compute molecular weight and descriptors
     mw = round(Chem.rdMolDescriptors.CalcExactMolWt(mol), 2)
     formula = Chem.rdMolDescriptors.CalcMolFormula(mol)
     logp = round(Chem.rdMolDescriptors.CalcCrippenDescriptors(mol)[0], 2)
@@ -166,6 +210,24 @@ def predict():
     hba = Chem.rdMolDescriptors.CalcNumHBA(mol)
     tpsa = round(Chem.rdMolDescriptors.CalcTPSA(mol), 2)
     rot_bonds = Chem.rdMolDescriptors.CalcNumRotatableBonds(mol)
+    
+    # Calculate top toxicophore atom idx for targeted mutations
+    avg_attrs = np.zeros(len(mol.GetAtoms()))
+    active_endpoints_count = 0
+    for idx, p in enumerate(probs):
+        if p > 0.5:
+            avg_attrs += attributions[idx]
+            active_endpoints_count += 1
+            
+    if active_endpoints_count > 0:
+        avg_attrs = avg_attrs / active_endpoints_count
+    top_atom_idx = int(np.argmax(avg_attrs)) if len(mol.GetAtoms()) > 0 else 0
+    
+    # Run RDKit organic chemistry mutation and scoring engine
+    analogs = mutate_molecule(smiles, probs, top_atom_idx, score_molecule_for_copilot)
+    
+    # Get 3D SDF coordinates
+    sdf_data = get_sdf_string(mol_3d)
     
     return jsonify({
         'smiles': smiles,
@@ -190,7 +252,8 @@ def predict():
         },
         'sdf': sdf_data,
         'atoms': graph['atoms'],
-        'advice': advice
+        'advice': advice,
+        'analogs': analogs
     })
 
 if __name__ == '__main__':
