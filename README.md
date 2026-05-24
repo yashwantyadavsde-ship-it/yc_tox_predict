@@ -1,128 +1,161 @@
-# 🔮 ToxGDL: GDL Multi-Agent Discovery Lab & Custom Agent Builder
+# 🔮 ToxGDL — Geometric Deep Learning Toxicity Predictor
 
-ToxGDL is a next-generation, GDL-powered **Multi-Agent Scientific Discovery Laboratory** designed to help senior drug discovery researchers identify, explain, and optimize away toxicological and ADMET safety liabilities in drug candidates.
+> **Predict multi-endpoint molecular toxicity using a custom Graph Neural Network with integrated explainability.**
 
-By merging **explainable Geometric Deep Learning (GDL)** with **RDKit-based organic chemistry mutation rules**, **Isomorphic Labs-inspired 3D pocket docking**, and an **autonomous board of collaborating AI specialists**, ToxGDL turns passive toxicity calculators into an active, collaborative discovery partner.
-
----
-
-## 🚀 Key Architectural Pillars
-
-```
-             ┌──────────────────────────────────────────────┐
-             │         INPUT: Chemical SMILES String        │
-             └──────────────────────┬───────────────────────┘
-                                    ▼
-       ┌─────────────────────────────────────────────────────────┐
-       │   1. GDL FOUNDATION ENGINE (PyTorch GNN Backbone)       │
-       │   - 3-Layer Message Passing (Bonds & Atoms)             │
-       │   - Integrated Gradients: 3D Toxicophore Heatmaps       │
-       │   - Isomorphic 3D Target Docking (Kd & Binding Energy)   │
-       └────────────────────────────┬────────────────────────────┘
-                                    ▼
-       ┌─────────────────────────────────────────────────────────┐
-       │   2. EXPERT ORGANIC MUTATION (RDKit SMARTS Reactions)   │
-       │   - Ames & hERG Bioisosteric Swaps (Amides, Ethers)     │
-       │   - Targeted C-H -> C-F Fluorine Metabolic Shielding    │
-       │   - Standalone Topological Synthetic Feasibility (SA)    │
-       └────────────────────────────┬────────────────────────────┘
-                                    ▼
-       ┌─────────────────────────────────────────────────────────┐
-       │   3. AUTONOMOUS BOARDROOM (Multi-Agent Panel)           │
-       │   - Dr. GDL (GNN Physicist)                             │
-       │   - Dr. Synthesis (Medicinal Chemist)                   │
-       │   - Dr. ADME (Pharmacokinetics Expert)                  │
-       │   - Dr. Safety (Lead Toxicologist)                      │
-       │   - CUSTOM DEPLOYED AGENTS (FDA Audit, Prof. Soluble)   │
-       └────────────────────────────┬────────────────────────────┘
-                                    ▼
-            ┌──────────────────────────────────────────────┐
-            │   OUTPUT: Interactive MPO Comparison Cards   │
-            │   & Collaborative Dialogue Consultation Log  │
-            └──────────────────────────────────────────────┘
-```
-
-### 1. The GDL Foundation Engine (`model/gnn.py`)
-At the core of ToxGDL is a **Geometric Deep Learning (GDL)** network built in PyTorch. Unlike standard models that process chemicals as text strings, GDL treats molecules in their natural, non-Euclidean representation—a **stereochemical graph** of nodes (atoms) and edges (bonds).
-* **Backbone Encoder (`MoleculeEncoder`):** A 3-layer Message Passing Neural Network (MPNN) that propagates chemical structural features up to 3 bonds away, pooling them into a 128-dimensional global molecular topology embedding.
-* **Plug-and-Play heads:** Decoupled classification heads (`PredictionHead`) to evaluate endpoints on demand (hERG cardiotoxicity, Ames mutagenicity, DILI hepatotoxicity, and acute LD50 oral toxicity).
-* **Explainability (Integrated Gradients):** Runs path-integral calculus on the GNN's outputs with respect to graph nodes. This mathematically calculates exactly which individual atoms drive toxicity, lighting them up in **bright red (toxicophores)** inside a **3Dmol.js conformer viewer**.
-
-### 2. Isomorphic Labs-Inspired Target Docking (`model/copilot.py`)
-Rather than predicting toxicity in isolation, ToxGDL incorporates structure-based target interaction. Select a therapeutic pocket (e.g. *EGFR oncology targets*, *Kinase cavities*, *CYP3A4 metabolic pockets*) in the sidebar, and the system simulates **3D Pocket Docking**:
-* Computes shape complementarity, hydrophobic surface matching (LogP curves), polar networks (TPSA, hydrogen bonding), and rotatable bond entropy loss.
-* Estimates **Gibbs Free Energy of Binding ($\Delta G$ in kcal/mol)** and **dissociation constants ($K_d$ in nanomolar)** to calculate the crucial **Selectivity Index** (Target-to-Tox ratio).
-
-### 3. Collaborative Multi-Agent Advisory Board (`model/agents.py`)
-ToxGDL features an autonomous panel of specialized AI researchers that debate trade-offs and collaborate to form a consensus redesign report:
-* **Dr. GDL (GNN Structural Physicist):** Maps conformer coordinates and toxicophore attribution hotspots.
-* **Dr. Synthesis (Medicinal Chemist):** Suggests realistic organic changes, bioisostere transforms, and synthetic feasibility (SA Score).
-* **Dr. ADME (Pharmacokinetics Expert):** Evaluates LogP, MW, TPSA, and membrane permeability trade-offs.
-* **Dr. Safety (Lead Toxicologist):** Reviews GDL scores, aligns with FDA boundaries, and signs off on the final consensus.
-* **Anthropic-Style Structured Reasoning:** Each agent runs a hidden **System 2 "thought" process** (doing deep mathematical analysis) before outputting its public **dialogue** to the boardroom chat thread.
-
-### 4. Custom Agent Laboratory (🧬 Deploy Portal)
-Senior researchers can **scale the lab by spinning up custom AI agents on the fly**:
-* Provide an Agent Name, emoji avatar, scientific role/specialty, and a custom persona prompt (defining their analytical reasoning bias).
-* **Knowledge Resources Field:** Paste custom links, research papers, or database guidelines. The agent will dynamically incorporate specific quotes and scientific principles from those resources to justify its claims during the boardroom debate!
+![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)
+![Flask](https://img.shields.io/badge/Flask-3.x-lightgrey?logo=flask)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.x-orange?logo=pytorch)
+![RDKit](https://img.shields.io/badge/RDKit-Cheminformatics-green)
 
 ---
 
-## 💻 Installation & Running Locally
+## ✨ Overview
+
+**ToxGDL** is an AI-powered drug safety analysis platform that predicts four critical toxicological endpoints for any molecule (input as a SMILES string) using a from-scratch **Geometric Deep Learning (GDL)** Graph Neural Network (GNN).
+
+It also provides:
+- 🧬 **Interactive 3D conformer visualization** with per-atom toxicophore heatmaps (via Integrated Gradients)
+- 🤖 **Chemist Copilot** — auto-generated bioisosteric redesign suggestions to reduce toxicity
+- 📊 **Molecular property panel** — MW, LogP, TPSA, H-bond donors/acceptors
+
+---
+
+## 🛡️ Toxicity Endpoints Predicted
+
+| Endpoint | Description |
+|---|---|
+| **hERG Cardiotoxicity** | Off-target potassium channel blockade risk (QT prolongation) |
+| **Ames Mutagenicity** | Genotoxic / DNA-damaging potential |
+| **DILI Hepatotoxicity** | Drug-Induced Liver Injury risk |
+| **Acute Oral Toxicity (LD50)** | High acute toxicity classification (LD50 < 50 mg/kg) |
+
+---
+
+## 🏗️ Architecture
+
+```
+SMILES Input
+    │
+    ▼
+Molecular Graph Construction (RDKit)
+  - Atom features: element, hybridization, degree, charge, aromaticity
+  - Bond features: type, conjugation, ring membership
+    │
+    ▼
+GDL Message Passing Network (3 layers)
+  - Custom MessagePassingLayer (sum aggregation)
+  - Skip connections (residual)
+  - Global sum + max pooling
+    │
+    ▼
+4x Independent Classification Heads (hERG / Ames / DILI / LD50)
+    │
+    ▼
+Integrated Gradients → Per-Atom Attribution Scores
+    │
+    ▼
+Chemist Copilot Advice + 3D Heatmap Visualization
+```
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
-* **Python 3.8+**
-* **RDKit** (for chemical graph manipulations)
-* **PyTorch** (for GNN tensor calculations)
-* **Flask** (for web controller routing)
+- Python 3.10+
+- pip
 
-### Setup & Run
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/yashwantyadavsde-ship-it/yc_tox_predict.git
-   cd yc_tox_predict
-   ```
+### Installation
 
-2. **Set up a Virtual Environment:**
-   ```bash
-   python -m venv .venv
-   # Activate on Windows:
-   .venv\Scripts\activate
-   # Activate on macOS/Linux:
-   source .venv/bin/activate
-   ```
+```bash
+# Clone the repository
+git clone https://github.com/yashwantyadavsde-ship-it/yc_tox_predict.git
+cd yc_tox_predict
 
-3. **Install Dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+# Create a virtual environment
+python -m venv .venv
 
-4. **Calibrate the GNN Models (Bootstrap Weights):**
-   Run the training script to train the backbone encoder and classification task heads on the reference toxicology datasets:
-   ```bash
-   python model/train.py
-   ```
-   *The calibrated weights will be saved to `model/weights/gdl_toxicity_model.pt`.*
+# Activate it
+# Windows:
+.venv\Scripts\activate
+# macOS/Linux:
+source .venv/bin/activate
 
-5. **Start the Discovery Lab Server:**
-   ```bash
-   python app.py
-   ```
+# Install dependencies
+pip install -r requirements.txt
+```
 
-6. **Open in Your Browser:**
-   Go to `http://127.0.0.1:5000` to launch the high-tech, glassmorphic Multi-Agent console.
+### Running the App
+
+```bash
+python app.py
+```
+
+Then open your browser at: **http://127.0.0.1:5000**
+
+> ⚡ On first run, if no pre-trained weights are found, the model will automatically train itself on the built-in curated toxicology reference dataset (~150 epochs, takes ~30 seconds).
 
 ---
 
-## ⚡ The Iterative Design Workflow: What to Expect
+## 📁 Project Structure
 
-1. **Analyze a Lead:** Input a 2D/3D SMILES string (e.g. *Haloperidol* presets) and select your therapeutic target in the sidebar. Click **⚡ Run Geometric Analysis**.
-2. **Observe the Boardroom:** Dr. GDL, Dr. Synthesis, Dr. ADME, and Dr. Safety immediately hold a collaborative debate in the **AI Research Board Room** tab. Toggle **View System 2 Thought** on any message to audit their hidden reasoning.
-3. **Review the MPO Cards:** In the right panel, inspect the synthesizable bioisostere cards, including their SA Scores, target pocket affinity, and side-by-side comparison tables with color-coded positive/negative changes.
-4. **Deploy Custom Agents:** Switch to the **🧬 Custom Agent Laboratory** tab. Deploy a custom agent named *Dr. FDA*, avatar `🛡️`, who flags Lipinski Rule of 5 violations and references your pasted guidelines. Deploy him, re-run your compound, and watch him instantly join the chat thread!
-5. **Close the Loop:** Click **⚡ Load Analog** on a proposed safe compound. It instantly loads back into the main analyzer, generates its new 3D shape and safety stats, and lets you dynamically refine your molecule, creating an addictive, high-velocity drug-design loop!
+```
+yc_tox_predict/
+├── app.py                    # Flask application & prediction API
+├── requirements.txt          # Python dependencies
+├── model/
+│   ├── gnn.py                # GNN architecture, featurization & Integrated Gradients
+│   ├── train.py              # Training script & toxicology reference dataset
+│   └── weights/              # Saved model weights (auto-generated, git-ignored)
+│       └── gdl_toxicity_model.pt
+├── templates/
+│   └── index.html            # Jinja2 HTML template
+└── static/
+    ├── css/style.css         # Glassmorphism dark-mode UI styles
+    └── js/main.js            # Frontend prediction logic & 3D viewer
+```
 
 ---
 
-## 🛡️ License & Contributions
-ToxGDL is open for contributions and academic research integrations. Licensed under the MIT License.
+## 🧪 Example Molecules
+
+| Molecule | SMILES | Expected Signal |
+|---|---|---|
+| Aspirin | `CC(=O)Oc1ccccc1C(=O)O` | All safe ✅ |
+| Haloperidol | `O=C(c1ccc(F)cc1)CCCN2CCC(n3c(=O)[nH]c4ccccc43)CC2` | hERG+ ⚠️ |
+| Nitrobenzene | `O=N(=O)c1ccccc1` | Ames+ ⚠️ |
+| Acetaminophen | `CC(=O)Nc1ccc(O)cc1` | DILI+ ⚠️ |
+| Nicotine | `CN1CCCC1c2cccnc2` | LD50+ ⚠️ |
+
+---
+
+## ⚙️ Model Details
+
+- **Framework**: PyTorch (custom GNN, no external GNN library required)
+- **Training data**: 25 curated reference molecules with high-quality multi-endpoint toxicology labels
+- **Loss**: Binary Cross-Entropy with Logits (multi-label)
+- **Optimizer**: Adam (lr=0.005, weight_decay=1e-4)
+- **Explainability**: Integrated Gradients (30 interpolation steps, zero-baseline)
+
+> **Note**: This model is trained on a small reference set for demonstration purposes. For production use, training on larger datasets (e.g., Tox21, ClinTox, hERGdb) is strongly recommended.
+
+---
+
+## 📦 Dependencies
+
+```
+flask
+rdkit
+torch
+numpy
+```
+
+---
+
+## 📄 License
+
+MIT License — feel free to use, modify, and distribute.
+
+---
+
+*Built with ❤️ using PyTorch, RDKit, and 3Dmol.js*
