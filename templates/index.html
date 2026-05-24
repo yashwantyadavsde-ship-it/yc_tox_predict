@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http://127.0.0.1:* http://localhost:* https://cdnjs.cloudflare.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: *; connect-src 'self' http://127.0.0.1:* http://localhost:* https://pubchem.ncbi.nlm.nih.gov;">
+    <title>ToxGDL | Geometric Deep Learning Molecule Toxicity Predictor</title>
+    
+    <!-- 3Dmol.js for premium 3D molecular rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js"></script>
+    <!-- Stylesheet -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Running Geometric Message Passing...</div>
+    </div>
+
+    <!-- Header -->
+    <header>
+        <div class="brand-logo">
+            🔮 ToxGDL
+            <span class="brand-badge">Geometric AI</span>
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+            <div class="dot green"></div> GNN Engine Calibrated
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main>
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <!-- Molecule Input Panel -->
+            <div class="glass-panel input-section">
+                <div class="section-title">🧪 Molecule Input</div>
+                <div class="form-group">
+                    <label for="smilesInput">SMILES String (2D/3D Compliant)</label>
+                    <textarea id="smilesInput" placeholder="Enter SMILES representation, e.g. CC(=O)Oc1ccccc1C(=O)O"></textarea>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="targetSelect">Therapeutic Target Pocket (Isomorphic Docking)</label>
+                    <select id="targetSelect" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 12px; padding: 12px; color: var(--text-primary); outline: none; font-size: 0.9rem; cursor: pointer; transition: all 0.2s;">
+                        <option value="General">General / Default Cavity</option>
+                        <option value="EGFR">EGFR (Oncology Pocket)</option>
+                        <option value="Kinase">General Kinase Pocket</option>
+                        <option value="hERG">hERG Potassium Channel</option>
+                        <option value="CYP3A4">CYP3A4 Metabolic Pocket</option>
+                    </select>
+                </div>
+                
+                <button id="analyzeBtn" class="btn-primary">
+                    <span>⚡ Run Geometric Analysis</span>
+                </button>
+                
+                <div style="margin-top: 20px;">
+                    <label>Quick Reference Presets</label>
+                    <div class="presets-container">
+                        <div class="preset-badge" data-smiles="CC(=O)Oc1ccccc1C(=O)O">Aspirin (Safe)</div>
+                        <div class="preset-badge" data-smiles="O=C(c1ccc(F)cc1)CCCN2CCC(n3c(=O)[nH]c4ccccc43)CC2">Haloperidol (hERG+)</div>
+                        <div class="preset-badge" data-smiles="O=N(=O)c1ccccc1">Nitrobenzene (Ames+)</div>
+                        <div class="preset-badge" data-smiles="CC(=O)Nc1ccc(O)cc1">Acetaminophen (DILI+)</div>
+                        <div class="preset-badge" data-smiles="CN1CCCC1c2cccnc2">Nicotine (LD50+)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Molecular Properties Panel -->
+            <div class="glass-panel info-section" id="propsPanel" style="display: none;">
+                <div class="section-title">📊 Molecular Properties</div>
+                <div id="resolvedNameBadge" style="display: none; margin-bottom: 15px; padding: 8px 12px; border-radius: 8px; background: rgba(34, 211, 238, 0.15); border: 1px solid rgba(34, 211, 238, 0.3); font-size: 0.85rem; color: #22d3ee; font-weight: 600;">
+                    🔍 Resolved Name: <span id="resolvedNameText"></span>
+                </div>
+                <div class="info-grid">
+                    <div class="info-card">
+                        <div class="info-val" id="valFormula">-</div>
+                        <div class="info-lbl">Formula</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valMW">-</div>
+                        <div class="info-lbl">Weight (g/mol)</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valLogP">-</div>
+                        <div class="info-lbl">LogP</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valTPSA">-</div>
+                        <div class="info-lbl">TPSA (Å²)</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valHBD">-</div>
+                        <div class="info-lbl">H-Bond Donors</div>
+                    </div>
+                    <div class="info-card">
+                        <div class="info-val" id="valHBA">-</div>
+                        <div class="info-lbl">H-Bond Acceptors</div>
+                    </div>
+                </div>
+                
+                <!-- Isomorphic 3D Docking Affinity Card -->
+                <div class="docking-affinity-card" id="dockingAffinityCard" style="margin-top: 20px; background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px; padding: 15px; display: none;">
+                    <div style="font-size: 0.75rem; color: #22d3ee; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                        <span>🧬 Isomorphic 3D Pocket Affinity</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px;">
+                        <span style="font-size: 1.2rem; font-weight: 800; color: white;" id="dockingEnergy">- kcal/mol</span>
+                        <span style="background: rgba(34, 211, 238, 0.2); border: 1px solid rgba(34, 211, 238, 0.4); padding: 4px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; color: #22d3ee;" id="dockingKd">Kd: - nM</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 6px;" id="dockingTargetName">Target Pocket: -</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div class="dashboard-grid">
+            <div class="top-row">
+                <!-- 3D Conformer & Heatmap Visualizer -->
+                <div class="glass-panel visualizer-container">
+                    <div class="vis-controls">
+                        <div class="section-title" style="margin-bottom: 0;">🧬 3D Conformer Visualizer</div>
+                        
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <label style="font-size: 0.75rem;">Color Map Attribution:</label>
+                            <select id="attrSelect" style="background: rgba(0,0,0,0.4); border: 1px solid var(--border-glass); border-radius: 8px; color: white; padding: 4px 8px; outline: none; font-size: 0.8rem;">
+                                <option value="herg">hERG Cardiotox</option>
+                                <option value="ames">Ames Mutagenicity</option>
+                                <option value="dili">DILI Hepatotox</option>
+                                <option value="ld50">Acute Oral (LD50)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="viewer3d" class="viewer-3d">
+                        <div class="empty-state-text" id="emptyStateText">
+                            Input a molecule SMILES string on the left and click analyze to render its 3D stereochemical conformation and off-target GDL toxicophore heatmap.
+                        </div>
+                    </div>
+                    
+                    <div class="vis-controls" style="border-bottom: none; border-top: 1px solid var(--border-glass); border-radius: 0 0 16px 16px; padding: 12px 25px;">
+                        <div class="vis-legend">
+                            <div class="legend-item"><span class="dot red"></span> High Toxicity Contribution</div>
+                            <div class="legend-item"><span class="dot white"></span> Neutral</div>
+                            <div class="legend-item"><span class="dot green"></span> Safety Contribution</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toxicity Endpoints Grid -->
+                <div class="glass-panel endpoints-container">
+                    <div class="section-title">🛡️ Toxicity Endpoint Predictions</div>
+                    
+                    <div class="endpoints-grid">
+                        <!-- hERG Cardiotoxicity -->
+                        <div class="endpoint-card">
+                            <div class="endpoint-meta">
+                                <span class="endpoint-name">hERG Cardiotoxicity</span>
+                                <span class="endpoint-score" id="scoreHerg">-</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Potassium channel blockade off-target risk</div>
+                            <div class="progress-bar-container">
+                                <div id="fillHerg" class="progress-fill"></div>
+                            </div>
+                        </div>
+
+                        <!-- Ames Mutagenicity -->
+                        <div class="endpoint-card">
+                            <div class="endpoint-meta">
+                                <span class="endpoint-name">Ames Genotoxicity</span>
+                                <span class="endpoint-score" id="scoreAmes">-</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Mutagenic / DNA damaging potential</div>
+                            <div class="progress-bar-container">
+                                <div id="fillAmes" class="progress-fill"></div>
+                            </div>
+                        </div>
+
+                        <!-- DILI Hepatotoxicity -->
+                        <div class="endpoint-card">
+                            <div class="endpoint-meta">
+                                <span class="endpoint-name">DILI Hepatotoxicity</span>
+                                <span class="endpoint-score" id="scoreDili">-</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">Drug-Induced Liver Injury risk</div>
+                            <div class="progress-bar-container">
+                                <div id="fillDili" class="progress-fill"></div>
+                            </div>
+                        </div>
+
+                        <!-- Acute Oral Toxicity (LD50) -->
+                        <div class="endpoint-card">
+                            <div class="endpoint-meta">
+                                <span class="endpoint-name">Acute Toxicity (LD50)</span>
+                                <span class="endpoint-score" id="scoreLd50">-</span>
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">High acute toxicity profile (LD50 &lt; 50mg/kg)</div>
+                            <div class="progress-bar-container">
+                                <div id="fillLd50" class="progress-fill"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Row: Chemist Copilot advice -->
+            <div class="bottom-row">
+                <div class="glass-panel copilot-section" id="copilotPanel" style="display: none;">
+                    <div class="copilot-header">
+                        <div class="section-title" style="margin-bottom: 0; font-size: 1.35rem;">🔮 GDL Multi-Agent Discovery Laboratory</div>
+                        <span class="brand-badge" style="background: rgba(6, 182, 212, 0.2); border-color: rgba(6, 182, 212, 0.4); color: #22d3ee; letter-spacing: 1px;">Active Boardroom</span>
+                    </div>
+                    
+                    <div class="copilot-split-container">
+                        <!-- Left Panel: Chat Boardroom & Custom Agent Creator Tabs -->
+                        <div class="copilot-left">
+                            <!-- Tab Controls -->
+                            <div class="tab-controls">
+                                <button class="tab-btn active" id="tabBoardroomBtn">🤖 AI Research Board Room</button>
+                                <button class="tab-btn" id="tabCustomAgentBtn">🧬 Custom Agent Laboratory</button>
+                            </div>
+                            
+                            <!-- Tab Content 1: AI Boardroom -->
+                            <div class="tab-content active" id="tabBoardroom">
+                                <div class="boardroom-chat-container" id="boardroomThread">
+                                    <!-- Dynamic agent speech bubbles will be injected here -->
+                                </div>
+                            </div>
+                            
+                            <!-- Tab Content 2: Custom Agent Builder -->
+                            <div class="tab-content" id="tabCustomAgent">
+                                <div class="custom-agent-form">
+                                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.4;">
+                                        🔬 **Scale the Lab**: Deploy your own specialized AI researcher into the active GDL boardroom. Describe their scientific role, their reasoning bias, and provide knowledge resources to train them instantly.
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group" style="flex: 2; margin-bottom: 12px; margin-right: 10px;">
+                                            <label for="agentName">Agent Name</label>
+                                            <input type="text" id="agentName" placeholder="e.g. Dr. FDA, Prof. Soluble" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; outline: none;">
+                                        </div>
+                                        <div class="form-group" style="flex: 1; margin-bottom: 12px;">
+                                            <label for="agentAvatar">Avatar Emoji</label>
+                                            <input type="text" id="agentAvatar" value="🧬" placeholder="Emoji" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; text-align: center; outline: none;">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-group" style="margin-bottom: 12px;">
+                                        <label for="agentRole">Scientific Role / Specialty</label>
+                                        <input type="text" id="agentRole" placeholder="e.g. Compliance Officer, Lipophilicity Expert" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; outline: none;">
+                                    </div>
+                                    
+                                    <div class="form-group" style="margin-bottom: 12px;">
+                                        <label for="agentPersona">Agent Philosophy / Prompt (Anthropic Persona)</label>
+                                        <textarea id="agentPersona" style="height: 70px; font-family: inherit; font-size: 0.85rem; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; outline: none;" placeholder="e.g. You are a strict regulatory officer. Warn about any compound exceeding a Molecular Weight of 450. Check if the compound violates Lipinski's Rule of 5."></textarea>
+                                    </div>
+
+                                    <div class="form-group" style="margin-bottom: 15px;">
+                                        <label for="agentResources">Expert Knowledge Resources / References (Citations)</label>
+                                        <textarea id="agentResources" style="height: 50px; font-family: inherit; font-size: 0.85rem; background: rgba(0, 0, 0, 0.3); border: 1px solid var(--border-glass); border-radius: 8px; padding: 10px; color: white; width: 100%; outline: none;" placeholder="e.g. Paste research papers, FDA 2024 handbook summaries, or solubility rules for your agent to quote."></textarea>
+                                    </div>
+                                    
+                                    <button id="deployAgentBtn" class="btn-primary" style="padding: 12px; font-size: 0.85rem; width: 100%; background: linear-gradient(135deg, var(--cyan) 0%, var(--primary) 100%);">
+                                        🚀 Deploy De-Novo Agent
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Right Panel: Synthesizable MPO Analogs -->
+                        <div class="copilot-right">
+                            <div class="subsection-header">⚡ Generative Bioisosteric Analogs (GNN Scored)</div>
+                            <div class="analogs-container" id="analogsContainer">
+                                <!-- Dynamic MPO Analog Cards will be injected here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Main JavaScript Logic -->
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>

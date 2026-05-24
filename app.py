@@ -382,6 +382,19 @@ def get_agents():
     """
     return jsonify(global_registry.get_all_agents())
 
+@app.after_request
+def add_security_headers(response):
+    response.headers['Content-Security-Policy'] = (
+        "default-src 'self' http://127.0.0.1:* http://localhost:* https://cdnjs.cloudflare.com; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: blob: *; "
+        "connect-src 'self' http://127.0.0.1:* http://localhost:* https://pubchem.ncbi.nlm.nih.gov; "
+        "frame-ancestors 'self' *;"
+    )
+    return response
+
 if __name__ == '__main__':
-    # Start the Flask app
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    # Start the Flask app on a clean, fresh port
+    app.run(host='127.0.0.1', port=5080, debug=True)
